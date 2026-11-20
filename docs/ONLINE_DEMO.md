@@ -2,7 +2,7 @@
 
 正式地址：https://musiccraft-agent-demo.spicypony68.chatgpt.site
 
-任何拿到链接的人都能打开，无需登录、安装 Python 或启动本地服务。GitHub 仓库继续保持私有。
+任何拿到链接的人都能打开，无需登录、安装 Python 或启动本地服务。GitHub 仓库也已公开，组员可直接查看和克隆源码。
 
 ## 课堂操作
 

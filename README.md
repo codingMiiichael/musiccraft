@@ -2,6 +2,8 @@
 
 **[在线演示网页](https://musiccraft-agent-demo.spicypony68.chatgpt.site)** · **[GitHub 项目](https://github.com/codingMiiichael/musiccraft)**
 
+仓库现已公开，组员可以直接查看和克隆。共同开发请参考 [协作说明](docs/COLLABORATION.md)；直接推送代码需要接受仓库协作者邀请。
+
 在线演示已公开，任何拿到链接的人都可打开，无需启动本地服务。点击「开始演示」即可体验完整流程。在线版使用浏览器内规则规划和合成占位音频；素材与版本仅保存在当前浏览器。源码位于 [online-demo/](online-demo/README.md)。
 
 音乐多模态 Agent 课程项目。当前聚焦两项主功能：**歌曲整体风格改编**、**上传参考声音的歌声转换**。从零作曲默认暂缓，可通过配置开启实验入口。
