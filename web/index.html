@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#121315"><title>MusicCraft · 你的音乐创作工作台</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="/" aria-label="MusicCraft 首页"><img src="/favicon.svg" width="36" height="36" alt=""><span>MusicCraft<small>YOUR IDEAS. YOUR SOUND.</small></span></a>
+    <div class="nav-label">工作空间</div>
+    <nav aria-label="主导航">
+      <button class="nav-item active" data-view="studio"><span class="nav-symbol">✧</span>创作工作台<span class="nav-arrow">↗</span></button>
+      <button class="nav-item" data-view="library"><span class="nav-symbol">▤</span>我的版本库<span id="versionCount" class="count">0</span></button>
+      <button class="nav-item" data-view="showcase"><span class="nav-symbol">▷</span>演示台</button>
+      <button class="nav-item" data-view="architecture"><span class="nav-symbol">⌘</span>项目架构</button>
+    </nav>
+    <div class="sidebar-note"><span class="note-spark">✳</span><p>每一个想法，<br>都值得被听见。</p><small>创作 / 改编 / 你的声音</small><div class="mini-bars" aria-hidden="true"></div></div>
+    <div class="sidebar-bottom"><div class="avatar">M</div><div>课程项目工作空间<small>MusicCraft · v0.2</small></div></div>
+  </aside>
+  <main>
+    <header class="topbar"><div class="breadcrumbs">WORKSPACE <span>/</span> <strong id="viewLabel">STUDIO</strong></div><div class="top-actions"><span id="modeBadge" class="mode-badge">连接中</span><span class="local-badge"><i></i>本地工作台</span></div></header>
+    <section id="studioView" class="view">
+      <div class="hero"><div><div class="eyebrow"><span></span> A LITTLE IDEA. A WHOLE NEW SOUND.</div><h1>让灵感，<br>拥有自己的<span class="accent">声音。</span></h1><p>同一首歌，新的风格，你的声音。上传歌曲，开始一次有迹可循的改编。</p></div><div class="hero-art" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="sound-mark"><div class="hero-bars"></div></div><span class="art-tag tag-one">a new melody ↗</span><span class="art-tag tag-two">made with your imagination</span><span class="art-star">✧</span></div></div>
+      <div id="modeNotice" class="mode-notice"><span>◉</span><div><strong>当前为流程演示模式</strong><span>不需要 API Key。音频为合成旋律占位，不代表真实作曲、改编或声音克隆效果。</span></div></div>
+      <div class="studio-grid">
+        <section class="card composer">
+          <div class="card-heading"><div><span class="section-number">01 /</span><h2>重新想象这首歌</h2></div><span class="small-muted">你的想法，由你定义</span></div>
+          <div class="task-tabs" role="tablist" aria-label="创作类型"><button role="tab" aria-selected="true" class="task-tab active" data-task="restyle">⇄ <span>风格改编</span></button><button role="tab" aria-selected="false" class="task-tab" data-task="voice_cover">♩ <span>音色翻唱</span></button><button role="tab" aria-selected="false" class="task-tab" data-task="compose" hidden>♫ <span>作曲 · 实验</span></button></div>
+          <div id="parentBanner" class="parent-banner" hidden><span id="parentText"></span><button id="clearParent" class="text-button">取消关联 ×</button></div>
+          <form id="createForm">
+            <label for="prompt" class="field-label">描述你的音乐<span id="promptCount">0 / 4000</span></label>
+            <textarea id="prompt" maxlength="4000" rows="4" placeholder="写一段关于毕业的古风纯音乐，以钢琴为主，像夏日晚风一样温柔……" required></textarea>
+            <div class="prompt-presets"><span>试试这些灵感</span><button type="button" data-preset="pop">流行木吉他 ↗</button><button type="button" data-preset="voice">用我的声音唱 ↗</button><button type="button" data-preset="guofeng">古风新编 ↗</button></div>
+            <div id="assetSection" class="asset-section">
+              <div class="asset-title"><span class="field-label">音频素材</span><button type="button" id="demoAssets" class="text-button">载入演示素材 ↗</button></div>
+              <div class="upload-grid">
+                <div class="upload-box" id="sourceBox"><span class="upload-icon">↥</span><strong>原曲 / 参考歌曲</strong><small>上传音频，或从已有版本继续</small><label class="file-button" for="sourceFile">选择音频<input id="sourceFile" type="file" accept="audio/*,.m4a,.flac,.webm"></label><div id="sourceStatus" class="asset-status">尚未选择</div><button type="button" class="text-button remove-asset" data-remove="source" hidden>移除素材 ×</button><audio id="sourcePreview" controls preload="none" hidden></audio></div>
+                <div class="upload-box" id="voiceBox" hidden><span class="upload-icon">♩</span><strong>你的声音</strong><small>建议 10–20 秒干净人声，至少 3 秒</small><div class="upload-actions"><label class="file-button" for="voiceFile">上传录音<input id="voiceFile" type="file" accept="audio/*,.m4a,.flac,.webm"></label><button type="button" id="recordVoice" class="file-button">录制声音</button></div><div id="voiceStatus" class="asset-status">尚未选择</div><button type="button" class="text-button remove-asset" data-remove="voice" hidden>移除素材 ×</button><audio id="voicePreview" controls preload="none" hidden></audio></div>
+              </div><small class="upload-hint">每个文件最多 32 MB。支持 WAV / MP3 / FLAC / OGG / M4A / WebM。参考声音请使用本人或获授权的录音。</small>
+            </div>
+            <div class="controls-grid"><div class="generation-only"><label class="field-label" for="style">音乐风格</label><select id="style"><option value="auto">跟随文字描述</option><option value="pop">流行 Pop</option><option value="guofeng">古风 Guofeng</option><option value="classical">古典 Classical</option><option value="rock">摇滚 Rock</option><option value="jazz">爵士 Jazz</option><option value="electronic">电子 Electronic</option></select></div><div class="generation-only"><label class="field-label" for="vocal">人声选择</label><select id="vocal"><option value="auto">跟随文字描述</option><option value="instrumental">纯音乐</option><option value="female">女声</option><option value="male">男声</option><option value="any">不限人声</option></select></div><div><label class="field-label" for="duration">片段时长</label><select id="duration"><option value="auto">自动 · 默认 20 秒</option><option value="10">10 秒</option><option value="20">20 秒</option><option value="30">30 秒</option><option value="40">40 秒</option></select></div></div>
+            <div class="clip-controls"><div><label class="field-label" for="clip_start">原曲起点 / 秒</label><input id="clip_start" type="number" min="0" max="3600" step="0.1" value="0"></div><div id="coverControl"><label class="field-label" for="cover_strength">原曲参考强度 <output id="strengthValue">0.65</output></label><input id="cover_strength" type="range" min="0" max="1" step="0.05" value="0.65"><small>较高值更依赖原曲；风格变化程度需试听。</small></div><div id="gainControl" hidden><label class="field-label" for="vocal_gain_db">歌声混音音量 / dB</label><input id="vocal_gain_db" type="number" min="-12" max="6" step="1" value="0"><small>调整转换歌声相对原伴奏的音量。</small></div></div><fieldset class="instrument-field generation-only"><legend class="field-label">偏好的乐器<span>未选时跟随描述</span></legend><div class="instrument-chips"><label><input type="checkbox" name="instrument" value="piano"><span>♮ 钢琴</span></label><label><input type="checkbox" name="instrument" value="guitar"><span>♫ 木吉他</span></label><label><input type="checkbox" name="instrument" value="strings"><span>〰 弦乐</span></label><label><input type="checkbox" name="instrument" value="drums"><span>◉ 鼓</span></label><label><input type="checkbox" name="instrument" value="guzheng"><span>≋ 古筝</span></label><label><input type="checkbox" name="instrument" value="bass"><span>♭ 贝斯</span></label></div></fieldset>
+            <details class="advanced generation-only"><summary>更多创作选项<span>歌词 / 速度 / 保留内容 ＋</span></summary><div class="controls-grid advanced-fields"><div><label for="theme" class="field-label">主题</label><input id="theme" maxlength="100" placeholder="自动提取"></div><div><label for="bpm" class="field-label">BPM</label><input id="bpm" type="number" min="40" max="200" placeholder="自动 · 默认 90"></div><div><label for="seed" class="field-label">随机种子</label><input id="seed" type="number" min="0" max="2147483647" value="42"></div></div><label class="field-label" for="lyrics">歌词<span>纯音乐时自动忽略</span></label><textarea id="lyrics" rows="4" maxlength="5000" placeholder="可粘贴歌词，推荐使用 [Verse] 和 [Chorus] 分段"></textarea><div class="preserve-options"><span>本次尽量保留</span><label><input type="checkbox" name="preserve" value="melody">主旋律</label><label><input type="checkbox" name="preserve" value="lyrics">歌词</label><label><input type="checkbox" name="preserve" value="accompaniment">原伴奏</label></div></details>
+            <div class="form-footer"><span>✧ 先确认方案，再开始生成</span><button id="planButton" class="primary-button" type="submit">解析创作方案 <span>↗</span></button></div>
+          </form>
+        </section>
+        <aside class="result-column"><section class="card result-card"><div class="card-heading"><div><span class="section-number">02 /</span><h2>创作与试听</h2></div><span id="resultStatus" class="small-muted">等待灵感</span></div><div id="resultContent" aria-live="polite"><div class="empty-result"><div class="vinyl"><div></div></div><h3>下一段旋律，<br>从你的想法开始。</h3><p>写下创作要求，查看方案，<br>然后在这里听见结果。</p><div class="empty-dots"><i></i><i></i><i></i></div></div></div></section><div class="workflow-note"><span>↳</span><p>每一次修改都是一个新版本。<br><strong>保留喜欢的，再探索一点不同。</strong></p></div></aside>
+      </div>
+      <section class="service-card card"><div><span class="section-number">MODEL SERVICES /</span><h2>模型连接状态</h2><p>连接成功后，仍需用真实样例验证输出。作曲当前暂缓。</p></div><button id="checkServices" class="secondary-button">检查连接 ↗</button><div id="serviceStatus" class="service-status">尚未检查模型服务</div></section>
+      <div class="recent-heading"><h2>最近的创作 <span id="recentCount">/ 00</span></h2><button id="showLibrary" class="text-button">查看全部版本 ↗</button></div><div id="recentJobs" class="version-grid"><div class="empty-library">你的第一段音乐，即将在这里开始。</div></div>
+    </section>
+    <section id="libraryView" class="view" hidden><div class="page-heading"><div class="eyebrow">YOUR SOUND, EVERY VERSION.</div><h1>我的版本库</h1><p>回到任何一个版本，继续下一段创作。</p></div><div id="allJobs" class="version-grid"></div></section>
+    <section id="showcaseView" class="view" hidden><div class="page-heading"><div class="eyebrow">REHEARSED &amp; READY</div><h1>演示台</h1><p>收藏已完成版本，回放原曲与结果。回放不调用模型；来源标记始终保留。</p></div><div id="showcaseJobs" class="version-grid"></div></section>
+    <section id="architectureView" class="view" hidden><div class="page-heading"><div class="eyebrow">BEHIND THE SOUND</div><h1>两条主线，一个音乐 Agent。</h1><p>课程项目架构 · 需求解析、音频工具、可追溯的多轮编辑</p></div><div class="architecture-flow"><div class="arch-node"><small>INPUT</small><h3>文字 + 音频</h3><p>创作描述 / 原曲 / 参考声音</p></div><span>→</span><div class="arch-node"><small>PLANNER</small><h3>约束与任务规划</h3><p>提取参数 / 继承版本 / 选择路线</p></div><span>→</span><div class="arch-node"><small>TOOLS</small><h3>专业音频模型</h3><p>生成 / 改编 / 分离与转换</p></div><span>→</span><div class="arch-node"><small>OUTPUT</small><h3>试听与继续编辑</h3><p>音频 / 执行记录 / 版本关系</p></div></div><div class="architecture-cards"><article class="card"><span class="section-number">01 / GENERATION</span><h2>音乐生成与改编</h2><p>ACE-Step Cover 适配器已实现上传、异步轮询和下载；先裁剪原曲再改编。旋律保留是软约束，真实效果待 GPU 验证。作曲默认暂缓。</p></article><article class="card"><span class="section-number">02 / VOICE</span><h2>歌声音色转换</h2><p>GPU Worker 执行代码已实现：Demucs 分离人声 → Seed-VC 参考音色转换 → FFmpeg 混音。支持进度、取消和中间音轨试听；待 GPU 验证。</p></article><article class="card"><span class="section-number">03 / MEMORY</span><h2>版本与约束继承</h2><p>SQLite 保存任务、参数、事件及父版本。基于已有结果修改会生成新任务，父版本与输入文件保持独立。</p></article></div><div class="card research-card"><div class="eyebrow">RESEARCH QUESTION</div><h2>多轮编辑，如何保留用户已经认可的内容？</h2><p>对比直接描述生成、结构化约束生成、Agent 工具规划。统一生成预算，测量指令遵循、内容保留、音质和耗时。</p><div id="integrationStatus" class="integration-status"></div></div></section>
+    <footer class="page-footer"><span>MusicCraft / A music agent course project</span><span>MAKE SOMETHING THAT SOUNDS LIKE YOU. ↗</span></footer>
+  </main>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>
