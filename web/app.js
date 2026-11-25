@@ -1,398 +1,953 @@
-"use strict";
-
-const $ = (selector) => document.querySelector(selector);
-const $$ = (selector) => [...document.querySelectorAll(selector)];
-const escapeHTML = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const labels = {compose:"灵感作曲",restyle:"风格改编",voice_cover:"音色翻唱",pop:"流行",guofeng:"古风",classical:"古典",rock:"摇滚",jazz:"爵士",electronic:"电子",piano:"钢琴",guitar:"木吉他",strings:"弦乐",drums:"鼓",bass:"贝斯",guzheng:"古筝",violin:"小提琴",flute:"笛子",instrumental:"纯音乐",female:"女声",male:"男声",any:"不限人声",melody:"主旋律",lyrics:"歌词",accompaniment:"原伴奏",queued:"排队中",running:"处理中",succeeded:"已完成",failed:"失败",canceling:"正在取消",canceled:"已取消"};
-const state = {task:"restyle",config:null,plan:null,planRevision:0,revision:0,parent:null,source:null,voice:null,jobs:[],currentJob:null,showcases:[],polling:false,uploading:0,planning:false,submitting:false,renderKey:"",recorder:null,recordTimer:null};
-let toastTimer;
-
-function toast(message, error = false) {
-  const el = $("#toast");
-  el.textContent = message; el.classList.toggle("error", error); el.hidden = false;
-  clearTimeout(toastTimer); toastTimer = setTimeout(() => {el.hidden = true;}, error ? 6500 : 3500);
+'use strict';
+const $ = (q, root = document) => root.querySelector(q),
+  $$ = (q, root = document) => [...root.querySelectorAll(q)];
+const icon = (n) => `<i data-lucide="${n}"></i>`;
+const escapeHTML = (s) =>
+  String(s).replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
+  );
+const tracks = {
+  pop: {
+    title: '晴日来信',
+    subtitle: '原创旋律 · 流行编配',
+    style: '流行 / Synth-pop',
+    cover: 'assets/cover-pop.png',
+    src: 'assets/pop.m4a',
+    midi: 'assets/pop.mid',
+  },
+  classical: {
+    title: '晴日来信 · 室内乐版',
+    subtitle: '同一段旋律 · 钢琴与弦乐',
+    style: '古典 / Chamber',
+    cover: 'assets/cover-classical.png',
+    src: 'assets/classical.m4a',
+    midi: 'assets/classical.mid',
+  },
+  soft: {
+    title: '晴日来信 · 轻柔版',
+    subtitle: '修订版本 · 更轻的弦乐',
+    style: '古典 / Soft chamber',
+    cover: 'assets/cover-classical.png',
+    src: 'assets/classical-soft.m4a',
+    midi: 'assets/classical-soft.mid',
+  },
+};
+for (const s of MusicCatalog.styles) {
+  if (!tracks[s.id])
+    tracks[s.id] = {
+      title: '晴日来信 · ' + s.name,
+      subtitle: '原创主题 · AI 风格改编',
+      style: s.name + ' / ' + s.en,
+      cover: s.group === '反差实验室' ? 'assets/cover-pop.png' : 'assets/cover-classical.png',
+      src: 'assets/theme-' + s.id + '.m4a',
+      duration: '0:38',
+      theme: true,
+    };
 }
-
-async function api(path, payload, options = {}) {
-  const headers = {"X-MusicCraft":"1", ...options.headers};
-  if (payload !== undefined) headers["Content-Type"] = "application/json";
-  const response = await fetch(path, {...options, headers, ...(payload !== undefined ? {method:"POST",body:JSON.stringify(payload)} : {})});
-  const value = await response.json();
-  if (!response.ok) throw new Error(value.error || `请求失败 (${response.status})`);
-  return value;
+Object.assign(tracks, {
+  'song-original': {
+    title: 'hate that i made you love me · 原曲',
+    subtitle: '用户提供的 MP3 · 0:47–1:07 片段',
+    style: 'Pop / Source excerpt',
+    cover: 'assets/cover-pop.png',
+    src: 'assets/song-original.m4a',
+    duration: '0:20',
+    caseStudy: true,
+  },
+  'song-chamber': {
+    title: 'hate that i made you love me · 室内古典',
+    subtitle: '转录旋律 · 重新编配',
+    style: 'Classical / Melody-locked',
+    cover: 'assets/cover-classical.png',
+    src: 'assets/song-chamber.m4a',
+    duration: '0:20',
+    caseStudy: true,
+  },
+  'song-nocturne': {
+    title: 'hate that i made you love me · 钢琴夜曲',
+    subtitle: '转录旋律 · 重新编配',
+    style: 'Piano / Melody-locked',
+    cover: 'assets/cover-classical.png',
+    src: 'assets/song-nocturne.m4a',
+    duration: '0:20',
+    caseStudy: true,
+  },
+  'song-erhu': {
+    title: 'hate that i made you love me · 西北喜宴',
+    subtitle: '转录旋律 · 重新编配',
+    style: 'Northwest wedding / Melody-locked',
+    cover: 'assets/cover-pop.png',
+    src: 'assets/song-erhu.m4a',
+    duration: '0:20',
+    caseStudy: true,
+  },
+  'song-lofi': {
+    title: 'hate that i made you love me · 深夜 Lo-fi',
+    subtitle: '转录旋律 · 重新编配',
+    style: 'Lo-fi / Melody-locked',
+    cover: 'assets/cover-classical.png',
+    src: 'assets/song-lofi.m4a',
+    duration: '0:20',
+    caseStudy: true,
+  },
+  'song-chip': {
+    title: 'hate that i made you love me · 8-bit 冒险',
+    subtitle: '转录旋律 · 重新编配',
+    style: 'Chiptune / Melody-locked',
+    cover: 'assets/cover-pop.png',
+    src: 'assets/song-chip.m4a',
+    duration: '0:20',
+    caseStudy: true,
+  },
+  'song-classical': {
+    title: 'hate that i made you love me · 早期 AI 改编',
+    subtitle: '真实 AI 改编 · 古典再创作',
+    style: 'Classical / AI cover',
+    cover: 'assets/cover-classical.png',
+    src: 'assets/song-classical.m4a',
+    duration: '0:20',
+    caseStudy: true,
+  },
+  'song-alternative': {
+    title: 'hate that i made you love me · 另一版改编',
+    subtitle: '真实 AI 改编 · 另一种演绎',
+    style: 'Classical / Alternative',
+    cover: 'assets/cover-classical.png',
+    src: 'assets/song-alternative.m4a',
+    duration: '0:20',
+    caseStudy: true,
+  },
+});
+let view = 'home',
+  current = 'song-chamber',
+  chosenStyle = 'classical',
+  customAudio = null,
+  customFilename = '',
+  score = null,
+  studioNotes = null,
+  studioName = '晴日来信 · 室内乐编配',
+  studioPlaying = false,
+  studioPosition = 0,
+  studioStarted = 0,
+  studioTimer = null,
+  studioContext = null,
+  studioMaster = null,
+  studioNodes = [],
+  studioGains = [],
+  bpm = 108,
+  transpose = 0,
+  mutes = [false, false, false, false],
+  solos = [false, false, false, false],
+  volumes = [0.75, 0.6, 0.65, 0.5],
+  revisionReady = false;
+let favorites = [];
+try {
+  favorites = JSON.parse(localStorage.getItem('coarrange-favorites') || '[]');
+} catch {}
+const audio = new Audio(tracks[current].src);
+audio.preload = 'metadata';
+audio.volume = 0.7;
+const main = $('#main');
+function icons() {
+  if (window.lucide) lucide.createIcons();
+  window.CoLocale?.apply();
 }
-
-function view(name) {
-  ["studio","library","showcase","architecture"].forEach((key) => {
-    $(`#${key}View`).hidden = key !== name;
-    $(`[data-view="${key}"]`).classList.toggle("active", key === name);
-  });
-  $("#viewLabel").textContent = {studio:"STUDIO",library:"LIBRARY",showcase:"SHOWCASE",architecture:"ARCHITECTURE"}[name];
-  window.scrollTo({top:0,behavior:"smooth"});
+function toast(message) {
+  $('#toast').textContent = window.CoLocale ? CoLocale.text(message) : message;
+  $('#toast').classList.add('show');
+  clearTimeout(toast.timeout);
+  toast.timeout = setTimeout(() => $('#toast').classList.remove('show'), 3400);
 }
-
-function dirty() {
-  state.revision++;
-  if (state.plan) {
-    const button = $("#runButton");
-    if (button) {button.disabled = true; button.textContent = "要求已修改，请重新解析";}
-    $("#resultStatus").textContent = "方案待更新";
+function time(t) {
+  if (!Number.isFinite(t)) return '0:00';
+  return `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+}
+let libraryFavorites = false;
+function setView(next) {
+  const target =
+    { home: 'workspace', create: 'workspace', transform: 'workspace', favorites: 'library' }[
+      next
+    ] || next;
+  if (next === 'create' || next === 'transform')
+    MusicCraftAgent.selectMode(next === 'create' ? 'create' : 'restyle');
+  if (target === 'library') {
+    libraryFavorites = next === 'favorites';
+    libraryFilter = 'all';
+    const section = document.querySelector('#library');
+    if (section) {
+      section.innerHTML = libraryView();
+      icons();
+    }
   }
+  location.hash = target;
+  document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document
+    .querySelectorAll('.nav-item[data-view]')
+    .forEach((button) =>
+      button.classList.toggle(
+        'active',
+        button.dataset.view === next || (next !== 'favorites' && button.dataset.view === target),
+      ),
+    );
 }
-
-function setTask(task, markDirty = true) {
-  if (task === "compose" && !state.config?.enable_compose) return;
-  state.task = task;
-  $$(".generation-only").forEach((el) => {el.hidden = task === "voice_cover";});
-  $("#coverControl").hidden = task !== "restyle";
-  $("#gainControl").hidden = task !== "voice_cover";
-  $(".clip-controls").hidden = task === "compose";
-  $$(".task-tab").forEach((button) => {
-    button.classList.toggle("active", button.dataset.task === task);
-    button.setAttribute("aria-selected", String(button.dataset.task === task));
+function render() {
+  view = 'workspace';
+  $('#breadcrumb').textContent = 'MusicCraft 音乐工作区';
+  if (document.getElementById('workspace')) {
+    document.getElementById('arrange').innerHTML = CoStudio.view();
+    document.getElementById('library').innerHTML = libraryView();
+  } else main.innerHTML = homeView();
+  icons();
+  paintNotes();
+  if ($('.remix-deck')) CoRemix.mount().catch(() => {});
+  updatePlayer();
+}
+function trackCard(key) {
+  const t = tracks[key];
+  return `<div class="compare-track"><div class="cover-wrap"><img src="${t.cover}" alt="${key === 'pop' ? '银色流动雕塑' : '光影中的三角钢琴'}"><button class="cover-play" data-play="${key}" aria-label="试听${t.title}">${icon('play')}</button></div><div class="track-info"><h3>${t.title}</h3><p>${key === 'pop' ? '轻快节奏，合成器与电子鼓' : '保留旋律，换上钢琴与弦乐'}</p><div class="tag-row"><span class="tag ${key === 'pop' ? 'rose' : ''}">${key === 'pop' ? '原始编配' : '风格改编'}</span><span class="tag">${key === 'pop' ? '流行' : '室内古典'}</span><span class="tag">0:38</span></div></div></div>`;
+}
+function homeView() {
+  return `<section id="workspace" class="workspace-section"><div class="art-hero">
+    <div class="art-hero-copy"><div class="art-eyebrow"><span class="art-spark" aria-hidden="true">✳</span><span data-i18n-ignore>MUSICCRAFT — A STUDIO FOR YOUR IMAGINATION</span></div>
+    <h1 data-i18n-ignore><span>Make it</span><em>your sound.</em></h1>
+    <p class="art-intro">让每一种声音，成为你的作品。</p><p class="art-description">重塑歌曲风格，用自己的声音翻唱，或让一个灵感长成旋律。</p>
+    <div class="art-actions"><a class="btn btn-primary" href="#music-agent">进入创作 ${icon('arrow-up-right')}</a><button class="art-listen" data-view="examples">${icon('headphones')}<span>先听听灵感</span></button></div>
+    </div>
+    <div class="art-record-scene" aria-hidden="true"><span class="art-orbit orbit-one"></span><span class="art-orbit orbit-two"></span><span class="art-scene-note" data-i18n-ignore>PLAY. REIMAGINE. REPEAT.</span><div class="art-record"><div class="art-record-label"><span data-i18n-ignore>MC / SIDE A</span><span class="record-flower">✳</span><i></i><span data-i18n-ignore>ORIGINAL BY YOU</span></div></div><span class="art-record-caption" data-i18n-ignore>AN OPEN SPACE<br>FOR A NEW FREQUENCY.</span><span class="art-scene-cross">+</span></div>
+    <div class="art-hero-foot"><span data-i18n-ignore>FROM AN IDEA TO A NEW FREQUENCY</span><div><span>风格重塑</span><i></i><span>个人音色</span><i></i><span>灵感作曲</span></div></div>
+    </div>${MusicCraftConnections.panel()}${MusicCraftAgent.workspace()}</section><section id="arrange" class="workspace-section">${CoStudio.view()}</section><section id="examples" class="workspace-section"><div class="section-head"><div><h2>风格试听与对比</h2><p>本区为预制试听，播放和切换风格不调用实时模型。</p></div></div>${themePlayground()}${songCaseStudy()}</section><section id="library" class="workspace-section">${libraryView()}</section>`;
+}
+function showResult(key, kind) {
+  musicStyleResult(key, kind);
+}
+let libraryFilter = 'all',
+  libraryQuery = '';
+const libraryHTML = (value) =>
+  String(value ?? '').replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
+  );
+const libraryDeleted = (key) =>
+  tracks[key]?.generated ? tracks[key].deleted : MusicCraftLibrary.hidden(key);
+function libraryView() {
+  const all = Object.keys(tracks)
+    .filter((key) => {
+      const track = tracks[key];
+      if (libraryFilter === 'trash') return libraryDeleted(key);
+      if (libraryDeleted(key) || (libraryFavorites && !favorites.includes(key))) return false;
+      if (libraryFilter === 'mine') return track.generated;
+      if (libraryFilter === 'demo') return !track.generated;
+      return libraryFilter === 'all' || track.mode === libraryFilter;
+    })
+    .sort((a, b) => Number(Boolean(tracks[b].generated)) - Number(Boolean(tracks[a].generated)));
+  const filters = [
+    ['all', '全部作品'],
+    ['mine', '我的作品'],
+    ['voice', '我的翻唱'],
+    ['restyle', '我的改编'],
+    ['create', '我的创作'],
+    ['demo', '预制示例'],
+    ['trash', '回收站'],
+  ];
+  const mine = Object.values(tracks).filter((track) => track.generated && !track.deleted).length;
+  return `<div class="view-title"><p class="eyebrow">YOUR LITTLE COLLECTION OF SOUNDS</p><h1>${libraryFavorites ? '喜欢的声音，留在这里。' : '每个版本，都值得听见。'}</h1><p>${libraryFavorites ? '点击播放器或列表中的爱心，把喜欢的版本收藏起来。' : '翻唱、改编和创作完成后自动入库，随时试听、收藏或下载。'}</p></div>
+    <div class="library-toolbar"><label class="search">${icon('search')}<input id="library-search" aria-label="搜索作品" placeholder="搜索作品、风格…" value="${libraryHTML(libraryQuery)}"></label><label class="library-filter"><span>查看</span><select id="library-filter" aria-label="作品分类">${filters.map(([id, label]) => `<option value="${id}" ${id === libraryFilter ? 'selected' : ''}>${label}</option>`).join('')}</select></label><button class="icon-btn" data-library-refresh aria-label="刷新作品库">${icon('refresh-cw')}</button><span class="count"><span>${all.length}</span> <span>个版本</span> · <span>${mine}</span> <span>个我的作品</span></span></div>
+    ${MusicCraftLibrary.error ? `<p class="library-note" role="status">${libraryHTML(MusicCraftLibrary.error)}</p>` : ''}
+    <div class="track-list" id="track-list">${all.length ? all.map(trackRow).join('') : `<div class="empty-library">${libraryFilter === 'trash' ? '回收站是空的。' : libraryFavorites ? '还没有收藏。去试听一首喜欢的音乐吧。' : '这里还没有作品，生成完成后会自动出现在这里。'}</div>`}</div><p class="compare-note">${icon('info')}<span>我的作品保存在本机项目中；收藏和预制示例的隐藏状态保存在此浏览器。删除的作品可在回收站恢复。</span></p>`;
+}
+function trackRow(key) {
+  const t = tracks[key],
+    title = libraryHTML(t.title),
+    deleted = libraryDeleted(key);
+  return `<div class="track-row${t.generated ? ' track-generated' : ''}" data-search="${libraryHTML((t.title + ' ' + t.style).toLowerCase())}"><img src="${t.cover}" alt=""><div><h3 ${t.generated ? 'data-i18n-ignore' : ''}>${title}</h3><p ${t.generated ? 'data-i18n-ignore' : ''}>${libraryHTML(t.subtitle)}</p></div><span>${libraryHTML(t.style)}</span><span>${libraryHTML(t.duration || '0:38')}</span><div class="track-actions">${deleted ? `<button class="btn btn-outline" data-library-restore="${key}">恢复</button>` : `<button class="icon-btn" data-play="${key}" aria-label="播放" title="${title}">${icon('play')}</button><button class="icon-btn favorite-btn ${favorites.includes(key) ? 'is-active' : ''}" data-fav="${key}" aria-label="${favorites.includes(key) ? '取消收藏' : '收藏'}" title="${title}">${icon('heart')}</button><a class="icon-btn" href="${t.src}" download="MusicCraft-${key}" aria-label="下载音频" title="${title}">${icon('download')}</a>${t.generated ? `<button class="icon-btn" data-library-rename="${key}" aria-label="重命名" title="${title}">${icon('pencil')}</button>` : ''}<button class="icon-btn" data-library-delete="${key}" aria-label="移入回收站" title="${title}">${icon('trash-2')}</button>`}</div></div>`;
+}
+function openLibraryName(key) {
+  const track = tracks[key];
+  if (!track?.generated) return;
+  $('#modal-root').innerHTML =
+    `<div class="modal-overlay"><section class="modal" role="dialog" aria-modal="true" aria-labelledby="library-name-heading"><div class="modal-head"><h2 id="library-name-heading">给作品命名</h2><button class="icon-btn" data-action="close-modal" aria-label="关闭">${icon('x')}</button></div><label class="field-label">作品名称<input id="library-title" type="text" maxlength="80" value="${libraryHTML(track.customTitle)}" placeholder="${libraryHTML(track.defaultTitle)}"></label><p class="helper">留空使用自动编号名称，最多 80 个字符。</p><p class="agent-error" id="library-name-error" role="alert"></p><button class="btn btn-primary" data-library-save-name="${key}">保存名称</button></section></div>`;
+  icons();
+  $('#library-title').focus();
+  $('#library-title').select();
+}
+function refreshLibraryView() {
+  const section = document.getElementById('library');
+  if (!section) return;
+  const focused = document.activeElement?.id === 'library-search';
+  section.innerHTML = libraryView();
+  icons();
+  applyLibrarySearch();
+  if (focused) section.querySelector('#library-search')?.focus();
+}
+function applyLibrarySearch() {
+  const query = libraryQuery.toLowerCase();
+  document.querySelectorAll('#track-list .track-row').forEach((row) => {
+    row.hidden = !(row.dataset.search + ' ' + row.textContent.toLowerCase()).includes(query);
   });
-  $("#assetSection").hidden = task === "compose";
-  $("#voiceBox").hidden = task !== "voice_cover";
-  $("#demoAssets").hidden = state.config?.mode !== "demo";
-  const placeholders = {
-    compose:"写一段关于毕业的古风纯音乐，以钢琴为主，像夏日晚风一样温柔……",
-    restyle:"保留这段歌曲的主旋律，改成温暖的木吉他流行风格……",
-    voice_cover:"保留原来的伴奏和旋律，把歌声换成我上传的声音……"
-  };
-  $("#prompt").placeholder = placeholders[task];
-  if (markDirty) dirty();
 }
-
-function setAsset(role, asset) {
-  state[role] = asset;
-  $(`[data-remove="${role}"]`).hidden = false;
-  $(`#${role}Status`).textContent = `${asset.name}${asset.demo ? " · 演示素材" : ""}`;
-  const player = $(`#${role}Preview`);
-  player.src = asset.url; player.hidden = false;
-  dirty();
+window.addEventListener('musiccraft-library-changed', () => {
+  for (const [key, track] of MusicCraftLibrary.tracks()) tracks[key] = track;
+  if (libraryDeleted(current)) {
+    audio.pause();
+    current = Object.keys(tracks).find((key) => !libraryDeleted(key)) || 'pop';
+    audio.src = tracks[current].src;
+    updatePlayer();
+  }
+  if (tracks[current]?.generated) updatePlayer();
+  refreshLibraryView();
+});
+function arrangeView() {
+  return CoStudio.view();
 }
-
-async function upload(role, file) {
-  if (!file) return;
-  if (file.size > 32 * 1024 * 1024 || file.size === 0) return toast("请上传非空且不超过 32 MB 的音频", true);
-  state.uploading++;
-  dirty();
-  $("#planButton").disabled = true;
-  $(`#${role}Status`).textContent = "上传中…";
+async function ensureScore() {
+  if (!score) score = await (await fetch('assets/score.json')).json();
+  return score;
+}
+async function paintNotes() {
+  await CoStudio.paint();
+}
+function updatePlayer() {
+  const t =
+    current === 'source'
+      ? {
+          ...tracks.pop,
+          title: customFilename,
+          subtitle: '上传文件 · 仅本地试听',
+        }
+      : tracks[current] || tracks.pop;
+  $('#player-cover').src = t.cover;
+  $('#player-title').toggleAttribute(
+    'data-i18n-ignore',
+    current === 'source' || Boolean(t.generated),
+  );
+  $('#player-title').textContent = t.title;
+  $('#player-subtitle').textContent = t.subtitle;
+  $('#main-play').innerHTML = icon(audio.paused ? 'play' : 'pause');
+  $('#main-play').setAttribute('aria-label', audio.paused ? '播放' : '暂停');
+  $('.now-playing .favorite-btn').classList.toggle('is-active', favorites.includes(current));
+  $('#loop-button').classList.toggle('is-active', audio.loop);
+  $('#loop-button').setAttribute('aria-pressed', String(audio.loop));
+  $('#audio-label').textContent =
+    current === 'source'
+      ? '本地上传音频'
+      : tracks[current]?.generated
+        ? '我的音乐作品'
+        : tracks[current]?.caseStudy
+          ? '真实歌曲改编案例'
+          : tracks[current]?.theme
+            ? '原创主题 · AI 改编'
+            : '原创编配示例';
+  updateSongCase();
+  icons();
+}
+async function playTrack(key) {
+  CoRemix.stop();
+  if (studioPlaying) stopStudio();
+  if (key === 'source' && customAudio) {
+    if (current !== 'source') {
+      audio.src = customAudio;
+      current = 'source';
+    }
+    $('#player-title').textContent = customFilename;
+    $('#player-subtitle').textContent = '上传文件 · 仅本地试听';
+    $('#audio-label').textContent = '本地上传音频';
+  } else {
+    if (!tracks[key]) return;
+    if (current !== key) {
+      current = key;
+      audio.src = tracks[key].src;
+    }
+    $('#audio-label').textContent = tracks[key].caseStudy
+      ? '真实歌曲改编案例'
+      : tracks[key].theme
+        ? '原创主题 · AI 改编'
+        : '原创编配示例';
+    updatePlayer();
+  }
   try {
-    const asset = await api("/api/assets", undefined, {method:"POST",body:file,headers:{"Content-Type":"application/octet-stream","X-Filename":encodeURIComponent(file.name),"X-Asset-Role":role}});
-    setAsset(role, asset); toast("音频已加入创作素材");
-  } catch (error) {
-    $(`#${role}Status`).textContent = state[role]?.name || "上传失败，请重试";
-    toast(error.message, true);
-  } finally {
-    state.uploading--; $("#planButton").disabled = state.uploading > 0 || state.planning;
+    await audio.play();
+    $('#main-play').innerHTML = icon('pause');
+    $('#main-play').setAttribute('aria-label', '暂停');
+    icons();
+  } catch {
+    toast('音频暂时无法播放，请稍后重试。');
   }
 }
-
-function controls() {
-  const result = {task:state.task,clip_start:Number($("#clip_start").value || 0)};
-  if (state.task === "restyle") result.cover_strength = Number($("#cover_strength").value);
-  if (state.task === "voice_cover") result.vocal_gain_db = Number($("#vocal_gain_db").value || 0);
-  for (const name of (state.task === "voice_cover" ? [] : ["style","vocal"])) if ($(`#${name}`).value !== "auto") result[name] = $(`#${name}`).value;
-  if ($("#duration").value !== "auto") result.duration = Number($("#duration").value);
-  if ($("#bpm").value) result.bpm = Number($("#bpm").value);
-  if ($("#seed").value) result.seed = Number($("#seed").value);
-  if ($("#theme").value.trim()) result.theme = $("#theme").value.trim();
-  if ($("#lyrics").value.trim()) result.lyrics = $("#lyrics").value.trim();
-  const instruments = $$("input[name=instrument]:checked").map((input) => input.value);
-  const preserve = $$("input[name=preserve]:checked").map((input) => input.value);
-  if (instruments.length && state.task !== "voice_cover") result.instruments = instruments;
-  if (preserve.length && state.task !== "voice_cover") result.preserve = preserve;
-  if (state.source) result.source_asset_id = state.source.id;
-  if (state.voice) result.voice_asset_id = state.voice.id;
+function saveFavorite(key) {
+  if (!tracks[key]) return;
+  favorites = favorites.includes(key) ? favorites.filter((k) => k !== key) : [...favorites, key];
+  try {
+    localStorage.setItem('coarrange-favorites', JSON.stringify(favorites));
+  } catch {}
+  const library = document.getElementById('library');
+  if (library) {
+    library.innerHTML = libraryView();
+    icons();
+  }
+  updatePlayer();
+  toast(favorites.includes(key) ? '已加入收藏' : '已取消收藏');
+}
+function download(path, name) {
+  const a = document.createElement('a');
+  a.href = path;
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+}
+function showModal(type) {
+  if (type === 'settings' && window.openPreferences) {
+    openPreferences();
+    return;
+  }
+  let title, body;
+  if (type === 'settings') {
+    title = '让这里，更像你的空间';
+    body = `<p>当前版本无需账号，收藏保存在此浏览器。</p><div class="toggle-row"><span>循环播放</span><button class="toggle" role="switch" aria-label="循环播放" aria-checked="${audio.loop}" data-action="switch-loop"></button></div><div class="help-step">${icon('plug-zap')}<div><strong>模型接入 · 后续配置</strong><p>初版不发送生成请求，也不收集 API 密钥。音乐样例已准备好，可以直接试听。</p></div></div><div class="help-step">${icon('palette')}<div><strong>柔雾配色</strong><p>紫灰用于主要操作，粉灰用于柔和调整，深色文字保持清晰。</p></div></div>`;
+  } else if (type === 'compare') {
+    title = '同一旋律，切换着听';
+    body = `<p>切换版本会尽量保留播放位置，方便比较编曲差异。</p>${Object.keys(tracks)
+      .map(
+        (k) =>
+          `<div class="help-step"><img src="${tracks[k].cover}" alt="" style="width:44px;height:44px;border-radius:7px"><div style="flex:1"><strong>${tracks[k].title}</strong><p>${tracks[k].subtitle}</p></div><button class="icon-btn" data-compare="${k}" aria-label="切换到${tracks[k].title}">${icon('play')}</button></div>`,
+      )
+      .join('')}`;
+  } else {
+    title = '从喜欢的声音开始';
+    body = `<p>MusicCraft 将音乐创作、风格改编、个人音色翻唱与 MIDI 编曲放在同一工作区。</p><p>DeepSeek 在后台理解创意；Mureka 负责音乐创作和风格改编，Seed-VC 负责个人换声。</p><p>上传原歌曲和自己的清晰歌声参考，点击开始换声即可完成分离、转换与混音。</p><p>预制示例可直接试听；真实生成与换声需要相应模型服务。</p>`;
+  }
+  $('#modal-root').innerHTML =
+    `<div class="modal-overlay"><section class="modal" role="dialog" aria-modal="true" aria-label="${title}"><div class="modal-head"><h2>${title}</h2><button class="icon-btn" data-action="close-modal" aria-label="关闭">${icon('x')}</button></div>${body}<button class="btn btn-primary" data-action="close-modal">${type === 'compare' ? '继续听音乐' : '知道了，开始探索'}</button></section></div>`;
+  icons();
+  $('.modal [data-action="close-modal"]').focus();
+}
+async function startStudio() {
+  CoRemix.stop();
+  await CoStudio.play();
+}
+function stopStudio() {
+  CoStudio.stop();
+}
+function updateMix() {
+  CoStudio.mix();
+}
+async function restartStudio() {
+  await CoStudio.restart();
+}
+function applyMixUI() {
+  CoStudio.mixUI();
+}
+function vlq(n) {
+  const a = [n & 127];
+  while ((n >>= 7)) a.unshift((n & 127) | 128);
+  return a;
+}
+async function exportMidi() {
+  await CoStudio.exportMidi();
+}
+function intBytes(v, n) {
+  return Array.from({ length: n }, (_, i) => (v >> (8 * (n - i - 1))) & 255);
+}
+function parseMidi(buffer) {
+  const v = new DataView(buffer);
+  let pos = 0;
+  function u8() {
+    if (pos >= v.byteLength) throw Error('文件不完整');
+    return v.getUint8(pos++);
+  }
+  function u16() {
+    return (u8() << 8) | u8();
+  }
+  function u32() {
+    return (u8() << 24) | (u8() << 16) | (u8() << 8) | u8();
+  }
+  function str(n) {
+    return String.fromCharCode(...Array.from({ length: n }, u8));
+  }
+  function variable() {
+    let n = 0,
+      b,
+      count = 0;
+    do {
+      b = u8();
+      n = (n << 7) | (b & 127);
+      if (++count > 4) throw Error('MIDI 格式错误');
+    } while (b & 128);
+    return n;
+  }
+  if (str(4) !== 'MThd') throw Error('请选择标准 MIDI 文件');
+  const len = u32(),
+    format = u16(),
+    count = u16(),
+    division = u16();
+  if (division & 32768 || format > 1) throw Error('暂支持 PPQ 格式的 Type 0/1 MIDI');
+  pos += len - 6;
+  let tempo = 500000,
+    raw = [],
+    tempos = [];
+  for (let k = 0; k < count; k++) {
+    if (str(4) !== 'MTrk') throw Error('MIDI 轨道格式错误');
+    const chunkLength = u32(),
+      end = pos + chunkLength;
+    let tick = 0,
+      running = 0,
+      active = new Map();
+    while (pos < end) {
+      tick += variable();
+      let status = u8();
+      if (status < 128) {
+        pos--;
+        status = running;
+      } else if (status < 240) running = status;
+      if (status === 255) {
+        const type = u8(),
+          n = variable();
+        if (type === 81 && n === 3) {
+          const value = (u8() << 16) | (u8() << 8) | u8();
+          tempos.push({ tick, tempo: value });
+          if (tick === 0) tempo = value;
+        } else pos += n;
+        if (type === 47) {
+          pos = end;
+          break;
+        }
+      } else if (status === 240 || status === 247) pos += variable();
+      else {
+        const type = status >> 4,
+          ch = status & 15,
+          a = u8(),
+          b = type === 12 || type === 13 ? 0 : u8();
+        const id = ch * 128 + a;
+        if (ch === 9) continue;
+        if (type === 9 && b > 0) active.set(id, { tick, pitch: a, velocity: b });
+        if (type === 8 || (type === 9 && b === 0)) {
+          const n = active.get(id);
+          if (n) {
+            raw.push({ ...n, end: tick });
+            active.delete(id);
+          }
+        }
+      }
+    }
+    pos = end;
+  }
+  if (!raw.length) throw Error('没有找到可播放的旋律音符');
+  tempos.sort((a, b) => a.tick - b.tick);
+  function secs(tick) {
+    let last = 0,
+      seconds = 0,
+      t = 500000;
+    for (const e of tempos) {
+      if (e.tick > tick) break;
+      seconds += ((e.tick - last) * t) / 1e6 / division;
+      last = e.tick;
+      t = e.tempo;
+    }
+    return seconds + ((tick - last) * t) / 1e6 / division;
+  }
+  const highestTrack = raw.sort((a, b) => a.tick - b.tick || b.pitch - a.pitch);
+  return highestTrack.slice(0, 2000).map((n) => ({
+    track: 0,
+    pitch: n.pitch,
+    velocity: n.velocity,
+    time: secs(n.tick) + 0.5556,
+    duration: Math.max(0.05, secs(n.end) - secs(n.tick)),
+  }));
+}
+function accompany(notes) {
+  const chroma = new Array(12).fill(0);
+  notes.forEach((n) => (chroma[n.pitch % 12] += n.duration));
+  let key = 0,
+    best = -Infinity;
+  const major = [0, 2, 4, 5, 7, 9, 11];
+  for (let k = 0; k < 12; k++) {
+    const s = chroma.reduce((a, v, p) => a + v * (major.includes((p - k + 12) % 12) ? 1 : -1.5), 0);
+    if (s > best) {
+      best = s;
+      key = k;
+    }
+  }
+  const beat = 60 / 108,
+    end = Math.min(65, Math.max(...notes.map((n) => (n.time + n.duration) / beat)));
+  const result = [...notes.filter((n) => n.time < end * beat)];
+  const triads = [
+    [0, 4, 7],
+    [9, 12, 16],
+    [5, 9, 12],
+    [7, 11, 14],
+  ];
+  for (let b = 0; b < Math.ceil(end / 4); b++) {
+    const c = triads[b % 4].map((p) => 48 + key + p);
+    for (const p of c)
+      result.push({
+        track: 1,
+        pitch: p,
+        velocity: 48,
+        time: (b * 4 + 1) * beat,
+        duration: 3.7 * beat,
+      });
+    for (let i = 0; i < 2; i++)
+      result.push({
+        track: 2,
+        pitch: c[0] - 12,
+        velocity: 62,
+        time: (b * 4 + 1 + i * 2) * beat,
+        duration: 1.8 * beat,
+      });
+    for (let i = 0; i < 8; i++)
+      result.push({
+        track: 3,
+        pitch: c[i % 3] + 12,
+        velocity: 45,
+        time: (b * 4 + 1 + i * 0.5) * beat,
+        duration: 0.4 * beat,
+      });
+  }
   return result;
 }
-
-function specChips(spec) {
-  const chips = spec.task === "voice_cover" ? ["参考声音转换", "保留原唱音高", `${spec.vocal_gain_db || 0} dB`] : [labels[spec.style],...(spec.instruments || []).map((x) => labels[x] || x),labels[spec.vocal]];
-  chips.push(`${spec.clip_start || 0}s 起 / ${spec.duration}s`);
-  if (spec.task === "restyle") chips.push(`参考强度 ${spec.cover_strength ?? 0.65}`);
-  return `<div class="spec-chips">${chips.map((x) => `<span>${escapeHTML(x)}</span>`).join("")}</div>`;
+async function handleMidi(file) {
+  await CoStudio.importMidi(file);
 }
-
-function stepsHTML(steps) {
-  return `<ol class="step-list">${steps.map((step,i) => `<li class="${escapeHTML(step.status || "pending")}"><span class="step-icon">${step.status === "succeeded" ? "✓" : step.status === "failed" ? "!" : i + 1}</span><span>${escapeHTML(step.label)}</span></li>`).join("")}</ol>`;
-}
-
-function warningsHTML(warnings, blockers = []) {
-  return [...blockers.map((text) => `<div class="notice blocker">${escapeHTML(text)}</div>`),...warnings.map((text) => `<div class="notice">${escapeHTML(text)}</div>`)].join("");
-}
-
-function renderPlan(plan) {
-  state.currentJob = null; state.renderKey = "";
-  $("#resultStatus").textContent = plan.blockers.length ? "需要补充信息" : "方案已就绪";
-  $("#resultContent").innerHTML = `<div class="plan-summary">${escapeHTML(plan.spec.theme)}<br>${escapeHTML(labels[plan.spec.task])}</div><p class="plan-subtitle">${plan.planner === "llm" ? "LLM 解析" : "离线规则解析"} · ${plan.mode === "demo" ? "流程演示" : "真实模型"}${plan.parent_job_id ? " · 基于已有版本" : ""}</p>${specChips(plan.spec)}${stepsHTML(plan.steps)}${plan.spec.preserve.length ? `<p class="plan-subtitle">本次保留：${plan.spec.preserve.map((x) => escapeHTML(labels[x])).join("、")}</p>` : ""}${warningsHTML(plan.warnings, plan.blockers)}<div class="plan-actions"><button class="primary-button" id="runButton" ${plan.blockers.length ? "disabled" : ""}>${plan.mode === "demo" ? "运行演示流程" : "开始模型生成"} ↗</button></div><details class="plan-details"><summary>查看任务参数与歌词</summary><pre>${escapeHTML(JSON.stringify(plan.spec,null,2))}</pre><p>歌词来源：${escapeHTML(plan.lyrics_origin)}</p></details>`;
-  $("#runButton").addEventListener("click", runPlan);
-}
-
-async function plan(event) {
-  event.preventDefault();
-  if (state.uploading || state.planning || state.recorder) return toast("请先完成上传或录音", true);
-  const revision = state.revision;
-  const button = $("#planButton");
-  state.planning = true; button.disabled = true; button.textContent = "正在解析…";
-  try {
-    const result = await api("/api/plans", {prompt:$("#prompt").value,controls:controls(),parent_job_id:state.parent?.id || null});
-    state.plan = result; state.planRevision = revision; renderPlan(result);
-    if (revision !== state.revision) {const run = $("#runButton");run.disabled = true;run.textContent = "要求已修改，请重新解析";}
-  } catch (error) {toast(error.message, true);}
-  finally {state.planning = false;button.disabled = state.uploading > 0;button.innerHTML = "解析创作方案 <span>↗</span>";}
-}
-
-async function runPlan() {
-  if (!state.plan || state.planRevision !== state.revision || state.submitting) return;
-  state.submitting = true;
-  $("#runButton").disabled = true;
-  try {
-    const job = await api("/api/jobs", {plan_id:state.plan.id});
-    state.plan = null; state.currentJob = job.id; rememberJob(job.id); state.renderKey = ""; renderJob(job);
-    await refreshJobs();
-  } catch (error) {toast(error.message, true); if ($("#runButton")) $("#runButton").disabled = false;}
-  finally {state.submitting = false;}
-}
-
-function renderJob(job) {
-  const key = JSON.stringify([job.id,job.status,job.steps,job.events,job.output_asset_id]);
-  if (key === state.renderKey) return;
-  state.renderKey = key;
-  $("#resultStatus").textContent = labels[job.status] || job.status;
-  const completed = job.status === "succeeded";
-  const active = ["queued","running","canceling"].includes(job.status);
-  const output = completed ? `<div class="output-player"><small>${job.mode === "demo" ? "DEMO / 合成旋律占位" : "YOUR NEW VERSION"}</small><h3>${escapeHTML(job.title)}</h3><audio controls preload="metadata" src="/api/assets/${job.output_asset_id}/audio"></audio><div class="output-actions"><a href="/api/assets/${job.output_asset_id}/audio" download="${job.mode === "demo" ? "DEMO" : "MusicCraft"}-${job.id.slice(0,8)}.wav">下载音频 ↓</a><button class="text-button" data-pin="${job.id}">收藏到演示台 ☆</button><button class="text-button" data-export="${job.id}">导出记录 ↓</button><button class="text-button" data-reuse="${job.id}">基于此版本继续 ↗</button></div><div class="signal-metrics">${job.metrics?.duration_seconds ? `<span>${job.metrics.duration_seconds}s</span><span>${job.metrics.sample_rate} Hz</span><span>${job.metrics.channels} 声道</span>` : ""}</div></div>` : "";
-  $("#resultContent").innerHTML = `<div class="plan-summary">${escapeHTML(job.title)}</div><p class="plan-subtitle">版本 ${job.id.slice(0,8)}${job.parent_job_id ? ` ← ${job.parent_job_id.slice(0,8)}` : ""} · ${job.mode === "demo" ? "演示模式" : "真实模型"}</p>${specChips(job.spec)}${output}${completed ? comparisonHTML(job) : ""}${active ? `<p class="progress-message">${escapeHTML(job.events.at(-1)?.message || "等待调度…")}</p>` : ""}${stepsHTML(job.steps)}${job.error ? `<div class="notice blocker">${escapeHTML(job.error)}</div>` : ""}${warningsHTML(job.warnings)}${["failed","canceled"].includes(job.status) ? `<button class="secondary-button" data-retry="${job.id}">重新检查方案 ↗</button>` : ""}${active ? `<div class="plan-actions"><button id="cancelJob" class="secondary-button" ${job.status === "canceling" ? "disabled" : ""}>${job.status === "canceling" ? "正在取消…" : "取消任务"}</button></div>` : ""}<details class="plan-details"><summary>执行记录 · ${job.events.length} 条</summary><pre>${escapeHTML(job.events.map((e) => `${new Date(e.at).toLocaleTimeString("zh-CN")}  ${e.message}`).join("\n") || "等待任务开始…")}</pre></details><details class="plan-details"><summary>任务参数</summary><pre>${escapeHTML(JSON.stringify(job.spec,null,2))}</pre></details>`;
-  if (completed) bindComparison(job);
-  if (active) $("#cancelJob").addEventListener("click", async () => {
-    try {renderJob(await api(`/api/jobs/${job.id}/cancel`, {}));}
-    catch (error) {toast(error.message, true);}
-  });
-}
-
-function versionHTML(job) {
-  const time = new Date(job.created_at).toLocaleString("zh-CN",{month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"});
-  return `<article class="version-card"><div class="version-card-top"><span class="version-badge">${job.mode === "demo" ? "DEMO" : "LIVE"} / ${job.id.slice(0,6)}</span><time>${escapeHTML(time)}</time></div><h3>${escapeHTML(job.title)}</h3><p>${escapeHTML(labels[job.spec.style])} · ${escapeHTML(labels[job.spec.vocal])} · ${job.spec.duration}s${job.parent_job_id ? ` · 源自 ${job.parent_job_id.slice(0,6)}` : ""}</p><div class="version-footer"><span class="job-status ${escapeHTML(job.status)}">${escapeHTML(labels[job.status] || job.status)}</span><div class="version-buttons"><button class="text-button" data-open="${job.id}">打开</button>${job.status === "succeeded" ? `<button class="text-button" data-reuse="${job.id}">继续编辑 ↗</button>` : ""}</div></div></article>`;
-}
-
-function renderLibrary() {
-  const empty = '<div class="empty-library">你的第一段音乐，即将在这里开始。</div>';
-  const cards = state.jobs.map(versionHTML);
-  $("#recentJobs").innerHTML = cards.slice(0,3).join("") || empty;
-  $("#allJobs").innerHTML = cards.join("") || empty;
-  $("#versionCount").textContent = state.jobs.length;
-  $("#recentCount").textContent = "/ " + String(state.jobs.length).padStart(2,"0");
-}
-
-async function refreshJobs() {
-  if (state.polling) return;
-  state.polling = true;
-  try {
-    state.jobs = (await api("/api/jobs")).jobs;
-    renderLibrary();
-    const current = state.jobs.find((job) => job.id === state.currentJob);
-    if (current) renderJob(current);
-  } finally {state.polling = false;}
-}
-
-async function reuse(jobId) {
-  const job = state.jobs.find((item) => item.id === jobId);
-  if (!job || job.status !== "succeeded") return;
-  state.parent = job; state.plan = null;
-  const assets = (await api("/api/assets")).assets;
-  const asset = assets.find((item) => item.id === job.output_asset_id);
-  if (!asset) throw new Error("版本输出素材不存在");
-  setAsset("source", asset);
-  if (job.spec.voice_asset_id && !state.voice) {
-    const voice = assets.find((item) => item.id === job.spec.voice_asset_id);
-    if (voice) setAsset("voice", voice);
+function handleAudio(file) {
+  if (!file) return;
+  if (file.size > 30 * 1024 * 1024) {
+    toast('请选择小于 30 MB 的音频文件');
+    return;
   }
-  $("#parentBanner").hidden = false;
-  $("#parentText").textContent = `正在基于版本 ${job.id.slice(0,8)} 继续创作`;
-  for (const name of ["style","vocal","duration"]) $(`#${name}`).value = "auto";
-  for (const name of ["theme","lyrics","bpm"]) $(`#${name}`).value = "";
-  $$("input[name=instrument],input[name=preserve]").forEach((input) => {input.checked = false;});
-  $("#seed").value = job.spec.seed;
-  $("#clip_start").value = 0;
-  setTask("restyle");
-  $("#prompt").value = "保留主旋律，把这一版改成木吉他流行风格。";
-  $("#promptCount").textContent = `${$("#prompt").value.length} / 4000`;
-  view("studio"); toast("已关联父版本。编辑要求后重新解析方案。");
-  $("#prompt").focus();
+  if (!file.type.startsWith('audio/') && !/\.(mp3|wav|m4a|ogg|aac|flac)$/i.test(file.name)) {
+    toast('请选择 MP3、WAV 或 M4A 音频');
+    return;
+  }
+  if (customAudio) URL.revokeObjectURL(customAudio);
+  customAudio = URL.createObjectURL(file);
+  customFilename = file.name;
+  render();
+  toast('已在本地载入音频；本版可试听，尚不执行实时改编。');
 }
-
-async function toggleRecord() {
-  if (state.recorder) {state.recorder.stop();return;}
-  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return toast("此浏览器不支持录音，请上传音频文件", true);
-  let stream;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({audio:true});
-    const type = ["audio/webm;codecs=opus","audio/mp4","audio/ogg;codecs=opus"].find((mime) => MediaRecorder.isTypeSupported(mime));
-    const recorder = new MediaRecorder(stream, type ? {mimeType:type} : {});
-    const chunks = [];
-    recorder.addEventListener("dataavailable", (event) => {if (event.data.size) chunks.push(event.data);});
-    recorder.addEventListener("stop", async () => {
-      clearTimeout(state.recordTimer); stream.getTracks().forEach((track) => track.stop()); state.recorder = null;
-      $("#recordVoice").textContent = "录制声音"; $("#recordVoice").classList.remove("recording");
-      const mime = recorder.mimeType || "audio/webm";
-      const ext = mime.includes("mp4") ? "m4a" : mime.includes("ogg") ? "ogg" : "webm";
-      await upload("voice", new File(chunks, `我的声音.${ext}`, {type:mime}));
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('button,[data-view]');
+  if (!b) return;
+  if (b.dataset.view) {
+    setView(b.dataset.view);
+    return;
+  }
+  if (b.hasAttribute('data-library-refresh')) {
+    b.disabled = true;
+    await MusicCraftLibrary.load();
+    return;
+  }
+  if (b.dataset.libraryRename) {
+    openLibraryName(b.dataset.libraryRename);
+    return;
+  }
+  if (b.dataset.librarySaveName) {
+    b.disabled = true;
+    try {
+      await MusicCraftLibrary.rename(b.dataset.librarySaveName, $('#library-title').value);
+      $('#modal-root').innerHTML = '';
+      toast('作品名称已保存');
+    } catch (error) {
+      $('#library-name-error').textContent = CoLocale.text(error.message);
+      b.disabled = false;
+    }
+    return;
+  }
+  if (b.dataset.libraryDelete || b.dataset.libraryRestore) {
+    const restore = Boolean(b.dataset.libraryRestore);
+    const key = b.dataset.libraryRestore || b.dataset.libraryDelete;
+    b.disabled = true;
+    try {
+      await MusicCraftLibrary.change(key, restore);
+      if (!restore)
+        document.querySelectorAll('[data-agent-output] audio').forEach((player) => {
+          if (player.getAttribute('src') === tracks[key]?.src) player.pause();
+        });
+      toast(restore ? '已恢复到作品库' : '已移入回收站，可随时恢复');
+    } catch (error) {
+      b.disabled = false;
+      toast(error.message);
+    }
+    return;
+  }
+  if (b.dataset.play) {
+    playTrack(b.dataset.play);
+    return;
+  }
+  if (b.dataset.compare) {
+    if (current === b.dataset.compare) {
+      playTrack(current);
+      return;
+    }
+    const at = audio.currentTime;
+    current = b.dataset.compare;
+    audio.src = tracks[current].src;
+    audio.addEventListener(
+      'loadedmetadata',
+      () => {
+        audio.currentTime = Math.min(at, audio.duration || 0);
+      },
+      { once: true },
+    );
+    playTrack(current);
+    return;
+  }
+  if (b.dataset.fav) {
+    saveFavorite(b.dataset.fav);
+    return;
+  }
+  if (b.dataset.style) {
+    chosenStyle = b.dataset.style;
+    $$('[data-style]').forEach((x) => {
+      x.classList.toggle('selected', x.dataset.style === chosenStyle);
+      x.setAttribute('aria-pressed', String(x.dataset.style === chosenStyle));
     });
-    state.recorder = recorder; recorder.start(); $("#recordVoice").textContent = "停止录音 ■";
-    $("#recordVoice").classList.add("recording"); $("#voiceStatus").textContent = "录音中，最多 20 秒…";
-    state.recordTimer = setTimeout(() => {if (state.recorder?.state === "recording") state.recorder.stop();},20000);
-  } catch (error) {stream?.getTracks().forEach((track) => track.stop());toast("未能开始录音，请检查麦克风权限或上传录音", true);}
-}
-
-function bindEvents() {
-  $$("[data-view]").forEach((button) => button.addEventListener("click", () => view(button.dataset.view)));
-  $$("[data-task]").forEach((button) => button.addEventListener("click", () => setTask(button.dataset.task)));
-  $("#showLibrary").addEventListener("click", () => view("library"));
-  $("#createForm").addEventListener("submit", plan);
-  $("#createForm").addEventListener("input", () => {dirty();$("#promptCount").textContent = `${$("#prompt").value.length} / 4000`;});
-  $("#sourceFile").addEventListener("change", (event) => upload("source",event.target.files[0]));
-  $("#voiceFile").addEventListener("change", (event) => upload("voice",event.target.files[0]));
-  $("#checkServices").addEventListener("click", checkServices);
-  $("#cover_strength").addEventListener("input", () => {$("#strengthValue").textContent = $("#cover_strength").value;});
-  $$("[data-remove]").forEach((button) => button.addEventListener("click", () => {
-    const role = button.dataset.remove; state[role] = null; button.hidden = true;
-    const audio = $(`#${role}Preview`); audio.pause(); audio.removeAttribute("src"); audio.hidden = true;
-    $(`#${role}File`).value = ""; $(`#${role}Status`).textContent = "尚未选择"; dirty();
-  }));
-  document.addEventListener("play", (event) => {if (event.target.tagName === "AUDIO") $$("audio").forEach((el) => {if (el !== event.target) el.pause();});}, true);
-  $("#recordVoice").addEventListener("click", toggleRecord);
-  $("#clearParent").addEventListener("click", () => {state.parent = null;$("#parentBanner").hidden = true;dirty();toast("已取消版本继承；当前音频仍作为独立素材保留");});
-  $("#demoAssets").addEventListener("click", async () => {
-    const button = $("#demoAssets"); button.disabled = true; state.uploading++; dirty(); $("#planButton").disabled = true;
-    try {const assets = await api("/api/demo-assets",{}, {method:"POST"});setAsset("source",assets.source);setAsset("voice",assets.voice);toast("已载入流程演示素材，参考音不是人声");}
-    catch (error) {toast(error.message,true);}finally{button.disabled = false;state.uploading--;$("#planButton").disabled = state.uploading > 0 || state.planning;}
-  });
-  const presets = {
-    pop:{task:"restyle",text:"保留主旋律，把原曲改成温暖的木吉他流行风格，20 秒。"},
-    voice:{task:"voice_cover",text:"保留原来的伴奏和旋律，把歌声换成我上传的声音。"},
-    guofeng:{task:"restyle",text:"保留主旋律，把原曲改成古风，加入古筝和弦乐。"}
-  };
-  $$("[data-preset]").forEach((button) => button.addEventListener("click", () => {
-    const preset = presets[button.dataset.preset];setTask(preset.task);$("#prompt").value = preset.text;
-    $("#promptCount").textContent = `${preset.text.length} / 4000`;dirty();
-  }));
-  document.addEventListener("click", async (event) => {
-    const button = event.target.closest("[data-open],[data-reuse],[data-pin],[data-export],[data-retry]");
-    if (!button) return;
-    try {
-      if (button.dataset.pin) {
-        await api(`/api/jobs/${button.dataset.pin}/pin`, {}); await refreshShowcase(); return toast("已收藏，可在演示台回放");
-      }
-      if (button.dataset.export) {
-        const job = await api(`/api/jobs/${button.dataset.export}`);
-        const url = URL.createObjectURL(new Blob([JSON.stringify(job,null,2)],{type:"application/json"}));
-        const link = document.createElement("a"); link.href = url; link.download = `MusicCraft-${job.id.slice(0,8)}.json`; link.click(); setTimeout(() => URL.revokeObjectURL(url),1000); return;
-      }
-      if (button.dataset.retry) return await restoreRequest(button.dataset.retry);
-      if (button.dataset.reuse) return await reuse(button.dataset.reuse);
-      const job = await api(`/api/jobs/${button.dataset.open}`);
-      state.currentJob = job.id;rememberJob(job.id);state.plan = null;state.renderKey = "";renderJob(job);view("studio");
-    } catch (error) {toast(error.message,true);}
-  });
-  window.addEventListener("beforeunload", () => {if(state.recorder) state.recorder.stream.getTracks().forEach((track) => track.stop());});
-}
-
-async function initialize() {
-  bindEvents();
-  $$(".mini-bars,.hero-bars").forEach((container) => {
-    const count = container.classList.contains("hero-bars") ? 13 : 25;
-    for(let i=0;i<count;i++){const bar = document.createElement("i");bar.style.height = `${12 + Math.abs(Math.sin(i * 1.4)) * (count === 13 ? 62 : 20)}px`;container.appendChild(bar);}
-  });
-  try {
-    state.config = await api("/api/config");
-    $("#modeBadge").textContent = state.config.mode === "demo" ? "DEMO · 演示模式" : "LIVE · 真实模型";
-    $("#modeNotice").hidden = state.config.mode !== "demo";
-    $("#integrationStatus").textContent = `音频运行：${state.config.mode === "demo" ? "演示" : "真实"} / 任务解析：${state.config.planner === "rules" ? "离线规则" : "LLM"} / 生成服务：${state.config.generation_ready ? "已配置" : "未配置"} / 歌声 Worker：${state.config.voice_ready ? "已配置" : "未配置"}`;
-    $('[data-task="compose"]').hidden = !state.config.enable_compose;
-    setTask(state.task,false); await refreshJobs(); await refreshShowcase();
-    let saved; try {saved = localStorage.getItem("musiccraft.currentJob");} catch (_) {}
-    const last = state.jobs.find((job) => job.id === saved) || state.jobs.find((job) => ["queued","running","canceling"].includes(job.status));
-    if (last) {state.currentJob = last.id;state.renderKey = "";renderJob(last);}
-    checkServices();
-  } catch (error) {$("#modeBadge").textContent = "连接失败";toast("无法连接本地服务，请确认 run.py 正在运行",true);}
-  setInterval(() => {
-    if (state.jobs.some((job) => ["queued","running","canceling"].includes(job.status))) refreshJobs().catch((error) => toast(error.message,true));
-  },1300);
-}
-
-initialize();
-
-function rememberJob(id) {
-  try {localStorage.setItem("musiccraft.currentJob", id);} catch (_) {}
-}
-
-function comparisonHTML(job) {
-  const original = job.artifacts?.source_clip || job.spec.source_asset_id;
-  const stems = {original_vocals:"分离出的原唱",converted_vocals:"转换后的歌声",accompaniment:"分离出的伴奏"};
-  return `<section class="comparison"><div class="compare-heading"><h3>原曲与结果</h3><span>${job.mode === "demo" ? "占位输出未转换原曲" : "A / B 试听"}</span></div>${original ? `<label>A · ${job.artifacts?.source_clip ? "已裁剪原曲" : "输入原曲"}<audio id="compareA" controls preload="metadata" src="/api/assets/${original}/audio"></audio></label>` : ""}<label>B · ${job.mode === "demo" ? "流程演示占位音" : "处理结果"}<audio id="compareB" controls preload="metadata" src="/api/assets/${job.output_asset_id}/audio"></audio></label>${original && job.mode === "live" ? '<div class="ab-buttons"><button class="secondary-button" data-ab="A">听 A · 原曲</button><button class="secondary-button" data-ab="B">听 B · 结果</button><small>按片段相对时间切换；生成式改编可能改变节奏。</small></div>' : ""}${Object.entries(stems).some(([name]) => job.artifacts?.[name]) ? `<details class="stems"><summary>逐步试听 · 人声与伴奏</summary>${Object.entries(stems).filter(([name]) => job.artifacts?.[name]).map(([name,label]) => `<label>${label}<audio controls preload="none" src="/api/assets/${job.artifacts[name]}/audio"></audio></label>`).join("")}</details>` : ""}</section>`;
-}
-
-function bindComparison(job) {
-  const a = $("#compareA"), b = $("#compareB");
-  if (!a || !b) return;
-  const offset = job.artifacts?.source_clip ? 0 : job.spec.clip_start || 0;
-  a.addEventListener("loadedmetadata", () => {a.currentTime = Math.min(offset, a.duration || offset);}, {once:true});
-  if (job.mode === "live") a.addEventListener("timeupdate", () => {if (a.currentTime >= offset + job.spec.duration) a.pause();});
-  let last = b;
-  for (const player of [a,b]) player.addEventListener("play", () => {last = player;});
-  $$("[data-ab]").forEach((button) => button.addEventListener("click", async () => {
-    const target = button.dataset.ab === "A" ? a : b;
-    const relative = Math.max(0, last.currentTime - (last === a ? offset : 0));
-    last.pause();
-    try {
-      if (!target.readyState) await new Promise((resolve,reject) => {
-        target.addEventListener("loadedmetadata",resolve,{once:true}); target.addEventListener("error",reject,{once:true}); target.load();
-      });
-      target.currentTime = Math.min(relative + (target === a ? offset : 0), Math.max(0,(target.duration || Infinity)-0.05));
-      await target.play(); last = target;
-    } catch (_) {toast("音频暂不可播放，请使用播放器重试", true);}
-  }));
-}
-
-async function refreshShowcase() {
-  state.showcases = (await api("/api/showcases")).showcases;
-  $("#showcaseJobs").innerHTML = state.showcases.map((item) => {
-    const job = state.jobs.find((job) => job.id === item.job_id);
-    if (!job) return "";
-    return `<div class="showcase-entry"><p class="showcase-origin">${escapeHTML(item.origin)} · 本地回放</p>${versionHTML(job)}</div>`;
-  }).join("") || '<div class="empty-library">在已完成结果中点击「收藏到演示台」。提前跑好真实样例后，可在这里稳定回放。</div>';
-}
-
-async function checkServices() {
-  const button = $("#checkServices"); button.disabled = true;
-  $("#serviceStatus").textContent = "检查服务连接中…";
-  try {
-    const result = await api("/api/services");
-    const names = {connected:"可连接",unconfigured:"未配置",needs_setup:"待安装依赖",offline:"未连接"};
-    $("#serviceStatus").innerHTML = [["ACE-Step / 风格改编",result.ace],["Voice Worker / 音色翻唱",result.voice]].map(([name,item]) => `<div class="service-row"><span>${name}</span><strong class="service-${escapeHTML(item.state)}">${escapeHTML(names[item.state] || item.state)}</strong><small>${escapeHTML(item.message)}</small></div>`).join("") + `<p>本地 FFmpeg：${result.ffmpeg ? "可用" : "未安装（真实改编的压缩音频裁剪需要）"} · 作曲：${result.compose_enabled ? "实验功能已开启" : "暂缓"}</p>`;
-  } catch (error) {$("#serviceStatus").textContent = error.message;}
-  finally {button.disabled = false;}
-}
-
-async function restoreRequest(id) {
-  const job = state.jobs.find((job) => job.id === id);
-  if (!job) return;
-  if (job.spec.task === "compose" && !state.config.enable_compose) return toast("作曲目前暂缓，请使用两项主功能",true);
-  const assets = (await api("/api/assets")).assets;
-  state.parent = null; state.plan = null; $("#parentBanner").hidden = true;
-  for (const [role,field] of [["source","source_asset_id"],["voice","voice_asset_id"]]) {
-    const asset = assets.find((item) => item.id === job.spec[field]);
-    if (asset) setAsset(role,asset); else $(`[data-remove="${role}"]`).click();
+    return;
   }
-  setTask(job.spec.task); $("#prompt").value = job.prompt;
-  for (const name of ["style","vocal","duration","theme","lyrics","bpm","seed","clip_start","cover_strength","vocal_gain_db"]) {
-    $(`#${name}`).value = job.spec[name] ?? {clip_start:0,cover_strength:0.65,vocal_gain_db:0}[name] ?? "";
+  if (b.dataset.prompt) {
+    $('#prompt').value = CoLocale.text(b.dataset.prompt);
+    if (b.dataset.prompt.includes('流行')) chosenStyle = 'pop';
+    else chosenStyle = 'classical';
+    $$('[data-style]').forEach((x) => {
+      x.classList.toggle('selected', x.dataset.style === chosenStyle);
+      x.setAttribute('aria-pressed', String(x.dataset.style === chosenStyle));
+    });
+    return;
   }
-  $("#strengthValue").textContent = $("#cover_strength").value;
-  for (const name of ["instrument","preserve"]) $$(`input[name=${name}]`).forEach((input) => {input.checked = (job.spec[name === "instrument" ? "instruments" : "preserve"] || []).includes(input.value);});
-  $("#promptCount").textContent = `${job.prompt.length} / 4000`;
-  dirty(); view("studio"); toast("已恢复请求。确认素材和服务后重新解析，不会自动执行。");
-}
+  if (b.dataset.mute !== undefined) {
+    const i = +b.dataset.mute;
+    mutes[i] = !mutes[i];
+    applyMixUI();
+    return;
+  }
+  if (b.dataset.solo !== undefined) {
+    const i = +b.dataset.solo;
+    solos[i] = !solos[i];
+    applyMixUI();
+    return;
+  }
+  switch (b.dataset.action) {
+    case 'toggle':
+      if (studioPlaying) stopStudio();
+      if (audio.paused) playTrack(current);
+      else audio.pause();
+      break;
+    case 'next':
+    case 'previous': {
+      const keys = Object.keys(tracks),
+        idx = keys.indexOf(current);
+      playTrack(keys[(idx + (b.dataset.action === 'next' ? 1 : keys.length - 1)) % keys.length]);
+      break;
+    }
+    case 'favorite':
+      saveFavorite(current);
+      break;
+    case 'loop':
+      audio.loop = !audio.loop;
+      updatePlayer();
+      break;
+    case 'download':
+      if (current === 'source') download(customAudio, customFilename);
+      else download(tracks[current].src, tracks[current].title + '.m4a');
+      break;
+    case 'help':
+    case 'settings':
+    case 'compare':
+      showModal(b.dataset.action);
+      break;
+    case 'close-modal':
+      $('#modal-root').innerHTML = '';
+      break;
+    case 'switch':
+      b.setAttribute('aria-checked', String(b.getAttribute('aria-checked') !== 'true'));
+      break;
+    case 'switch-loop':
+      audio.loop = !audio.loop;
+      b.setAttribute('aria-checked', String(audio.loop));
+      updatePlayer();
+      break;
+    case 'preview-plan': {
+      const prompt = $('#prompt').value.trim();
+      showResult(chosenStyle, 'create');
+      if (prompt)
+        $('#user-plan').innerHTML =
+          '<span>你的方向：</span><span data-i18n-ignore>' +
+          escapeHTML(prompt) +
+          '</span><span>。试听使用本站对应风格的固定示例。</span>';
+      icons();
+      break;
+    }
+    case 'preview-transform':
+      showResult(chosenStyle, 'transform');
+      break;
+    case 'play-source':
+      playTrack(customAudio ? 'source' : 'pop');
+      break;
+    case 'reset-source':
+      if (current === 'source') {
+        audio.pause();
+        current = 'pop';
+        audio.src = tracks.pop.src;
+      }
+      if (customAudio) URL.revokeObjectURL(customAudio);
+      customAudio = null;
+      customFilename = '';
+      render();
+      break;
+    case 'soft-revision':
+      revisionReady = true;
+      playTrack('soft');
+      toast('正在试听已渲染的轻柔版：弦乐更轻，钢琴更突出。');
+      $$('.version-chip').forEach((x) => x.classList.toggle('active', x.dataset.play === 'soft'));
+      break;
+    case 'studio-play':
+      if (studioPlaying) stopStudio();
+      else
+        try {
+          await startStudio();
+        } catch {
+          toast('编曲播放暂时不可用，请重试。');
+        }
+      break;
+    case 'export-midi':
+      exportMidi();
+      break;
+    case 'reset-studio':
+      await CoStudio.reset();
+      break;
+    case 'piano-focus':
+      CoStudio.focus();
+      toast('已突出钢琴，降低其他声部音量。');
+      break;
+    case 'soften':
+      volumes = volumes.map((v) => v * 0.75);
+      applyMixUI();
+      toast('已降低各声部音量。');
+      break;
+    case 'slow-down':
+      bpm = Math.max(50, bpm - 12);
+      $('#studio-bpm').value = bpm;
+      restartStudio();
+      toast('速度已调整为 ' + bpm + ' BPM。');
+      break;
+  }
+});
+document.addEventListener('input', (e) => {
+  if (e.target.id === 'library-search') {
+    libraryQuery = e.target.value;
+    applyLibrarySearch();
+  }
+  if (e.target.dataset.mix !== undefined) {
+    volumes[+e.target.dataset.mix] = +e.target.value;
+    updateMix();
+  }
+  if (e.target.id === 'volume') {
+    audio.volume = +e.target.value;
+    CoRemix.volume(audio.volume);
+    if (studioMaster) studioMaster.gain.value = 0.38 * +e.target.value;
+  }
+  if (e.target.id === 'seek' && audio.duration)
+    audio.currentTime = (Number(e.target.value) / 1000) * audio.duration;
+});
+document.addEventListener('change', (e) => {
+  if (e.target.id === 'audio-upload') handleAudio(e.target.files[0]);
+  if (e.target.id === 'midi-upload') handleMidi(e.target.files[0]);
+  if (e.target.id === 'studio-bpm') {
+    bpm = Math.max(50, Math.min(180, +e.target.value || 108));
+    e.target.value = bpm;
+    restartStudio();
+  }
+  if (e.target.id === 'studio-key') {
+    transpose = +e.target.value;
+    restartStudio();
+    paintNotes();
+  }
+});
+document.addEventListener('dragover', (e) => {
+  const zone = e.target.closest('.dropzone');
+  if (zone) {
+    e.preventDefault();
+    zone.classList.add('dragover');
+  }
+});
+document.addEventListener('dragleave', (e) =>
+  e.target.closest('.dropzone')?.classList.remove('dragover'),
+);
+document.addEventListener('drop', (e) => {
+  const zone = e.target.closest('.dropzone');
+  if (zone) {
+    e.preventDefault();
+    zone.classList.remove('dragover');
+    handleAudio(e.dataTransfer.files[0]);
+  }
+});
+document.addEventListener('click', (e) => {
+  if (e.target.classList.contains('modal-overlay')) $('#modal-root').innerHTML = '';
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') $('#modal-root').innerHTML = '';
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault();
+    setView('create');
+    document.querySelector('[data-agent-field="instruction"]')?.focus();
+  }
+  if (
+    e.code === 'Space' &&
+    !['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(document.activeElement.tagName) &&
+    !$('.modal')
+  ) {
+    e.preventDefault();
+    if (location.hash === '#arrange') $('#studio-play')?.click();
+    else $('#main-play').click();
+  }
+  if (e.key === 'Tab' && $('.modal')) {
+    const els = $$('button,input,select,a[href]', $('.modal'));
+    const first = els[0],
+      last = els[els.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+});
+audio.addEventListener('timeupdate', () => {
+  $('#elapsed').textContent = time(audio.currentTime);
+  $('#duration').textContent = time(audio.duration);
+  $('#seek').value = audio.duration ? Math.round((audio.currentTime / audio.duration) * 1000) : 0;
+});
+audio.addEventListener('loadedmetadata', () => ($('#duration').textContent = time(audio.duration)));
+audio.addEventListener('play', updatePlayer);
+audio.addEventListener('pause', updatePlayer);
+audio.addEventListener('ended', updatePlayer);
+audio.addEventListener('error', () => toast('这个音频无法播放，请尝试其他格式或内置样例。'));
+window.addEventListener('hashchange', () => {
+  const next = location.hash.slice(1) || 'workspace';
+  const target =
+    { home: 'workspace', create: 'workspace', transform: 'workspace', favorites: 'library' }[
+      next
+    ] || next;
+  document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+const initialSection = location.hash.slice(1) || 'workspace';
+render();
+if (initialSection !== 'workspace') setView(initialSection);
+ensureScore().catch(() => {});
+
+document.addEventListener('change', (event) => {
+  if (event.target.id === 'library-filter') {
+    libraryFilter = event.target.value;
+    refreshLibraryView();
+  }
+});
+MusicCraftLibrary.load();
+window.addEventListener('focus', () => MusicCraftLibrary.load());
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter' && event.target.id === 'library-title') {
+    event.preventDefault();
+    document.querySelector('[data-library-save-name]:not(:disabled)')?.click();
+  }
+});

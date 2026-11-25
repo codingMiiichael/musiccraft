@@ -80,6 +80,17 @@ def run_command(args, log, timeout=1200, cwd=None, canceled=lambda:False):
             stop_process(process)
 
 
+def mix_filter(vocal_gain_db=0):
+    # Ubuntu 22.04's FFmpeg lacks alimiter's newer latency option. At the fixed
+    # 44.1 kHz rate, attack=5 ms buffers 220 frames and delays audio by 219 frames.
+    # The padded vocal input flushes the tail; trim the delay before setting PTS.
+    return ("[0:a]aformat=sample_rates=44100:channel_layouts=stereo,volume="+str(vocal_gain_db)+"dB,apad[v];"
+            "[1:a]aformat=sample_rates=44100:channel_layouts=stereo[b];"
+            "[v][b]amix=inputs=2:duration=longest:normalize=0,volume=0.8,aresample=44100,"
+            "alimiter=limit=0.95:level=false:attack=5:release=50,"
+            "atrim=start_sample=219,asetpts=PTS-STARTPTS[m]")
+
+
 def run_pipeline(config, folder, source, reference, spec, stage=lambda key,message:None, canceled=lambda:False, runner=run_command):
     folder = Path(folder).resolve()
     folder.mkdir(parents=True,exist_ok=True)
@@ -127,8 +138,7 @@ def run_pipeline(config, folder, source, reference, spec, stage=lambda key,messa
     stage("mix","对齐转换歌声与原伴奏，控制混音峰值")
     result = folder/"result.wav"
     # Common attenuation and a limiter prevent clipping without changing pitch or tempo.
-    gain = str(spec.get("vocal_gain_db",0))
-    filters = "[0:a]volume="+gain+"dB,apad[v];[v][1:a]amix=inputs=2:duration=longest:normalize=0,volume=0.8,alimiter=limit=0.95:level=false:latency=true[m]"
+    filters = mix_filter(spec.get("vocal_gain_db",0))
     run([executable,"-nostdin","-v","error","-y","-i",str(candidates[0]),"-i",str(backing),
          "-filter_complex",filters,"-map","[m]","-t",str(duration),"-ar","44100","-ac","2","-c:a","pcm_s16le",str(result)])
     if not result.is_file(): raise PipelineError("混音没有产生结果文件")
