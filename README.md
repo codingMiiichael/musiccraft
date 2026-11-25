@@ -1,90 +1,125 @@
-# MusicCraft · v0.2
+# MusicCraft
 
-**[在线演示网页](https://musiccraft-agent-demo.spicypony68.chatgpt.site)** · **[GitHub 项目](https://github.com/codingMiiichael/musiccraft)**
+A bilingual music arrangement prototype for people who have ideas, but no music theory background. Explore an original melody in 13 styles, compare prepared AI arrangements, and build a playful arrangement with 31 instrument sounds.
 
-仓库现已公开，组员可以直接查看和克隆。共同开发请参考 [协作说明](docs/COLLABORATION.md)；直接推送代码需要接受仓库协作者邀请。
+The prepared demo and MIDI workbench run in the browser without a GPU or API key. MusicCraft Agent uses a Node backend with centrally managed engines. A single Generate action runs DeepSeek/OpenAI planning in the background, then ACE-Step/Stable Audio for music or Seed-VC for singing conversion. Internal prompts are not displayed or returned by the plan endpoint. Users select models without entering URLs or keys. The project operator provides accounts and credits once; singing conversion uses the dedicated Seed-VC worker. See [managed model setup](docs/MANAGED_MODELS.md).
 
-在线演示已公开，任何拿到链接的人都可打开，无需启动本地服务。点击「开始演示」即可体验完整流程。在线版使用浏览器内规则规划和合成占位音频；素材与版本仅保存在当前浏览器。源码位于 [online-demo/](online-demo/README.md)。
+The earlier Python v0.2 prototype, proposal documents and standalone hosted-demo source are preserved in [legacy/musiccraft-v02/](legacy/musiccraft-v02/README.md). The repository root now contains the current Node-based MusicCraft application; the earlier hosted demo is not redeployed by this source update.
 
-音乐多模态 Agent 课程项目。当前聚焦两项主功能：**歌曲整体风格改编**、**上传参考声音的歌声转换**。从零作曲默认暂缓，可通过配置开启实验入口。
+## Quick start
 
-**当前没有接入 GPU/API：本机默认运行的是明确标注的流程演示，输出为程序合成旋律，不会转换上传歌曲或克隆声音。真实模型执行代码已实现，尚未在 GPU 上验证效果。**
-
-## 立即运行
-
-本地仅需 Python 3.9+，无需安装第三方包：
+Install **Node.js 20.11 or newer** (22 LTS recommended), then run:
 
 ```bash
-python3 -B run.py
+git clone https://github.com/codingMiiichael/musiccraft.git
+cd musiccraft
+npm ci
+npm start
 ```
 
-打开 [本地工作台](http://127.0.0.1:8765)。端口占用时加 `--port 8766`。结束时 Ctrl+C；素材和版本保存在 `data/`。
+Open **http://localhost:8788**. Run `npm ci` once to install the bundled audio processor and dependencies. To use another port, run `npm start -- --port 8080`.
 
-1. 默认「风格改编」→「载入演示素材」→「流行木吉他」。
-2. 「解析创作方案」→ 核对参数 →「运行演示流程」。
-3. 试听、下载、导出执行记录，或「收藏到演示台」。
-4. 切换「音色翻唱」→「用我的声音唱」→ 解析并运行。
-5. 在「演示台」打开已收藏版本，回放输入与输出；不重复调用模型。
-
-上传音频与浏览器录音可用，单文件最多 32 MiB，录音最长 20 秒。演示模式中的上传只验证工作流程。
-
-## 这一版的实现
-
-| 能力 | 状态与边界 |
-| --- | --- |
-| 风格改编 | ACE-Step Cover 上传、异步轮询、下载；先按起点和时长裁剪源音频。真实效果待验证 |
-| 歌声音色转换 | GPU Worker 执行 Demucs → Seed-VC F0 条件转换 → FFmpeg 混音；真实效果待验证 |
-| 中间音轨 | 真实 Worker 返回裁剪原曲、原唱、转换歌声、伴奏，支持逐步试听 |
-| 展示与回放 | A/B 切换、历史版本、收藏演示台、JSON 记录导出、刷新后恢复当前任务 |
-| 任务控制 | 方案确认、异步队列、阶段日志、取消、失败后恢复请求，无自动付费重试 |
-| Agent | 离线规则解析可用；可配置 LLM JSON 解析适配器，待真实供应商联调 |
-| 作曲 | 默认关闭；`MUSICCRAFT_ENABLE_COMPOSE=true` 开启实验入口，不作为本期必交能力 |
-
-音频格式与信号检查已经实现，**不等于音乐质量、风格或身份相似度评价**。真实服务失败直接报错，不退回合成音频。
-
-## 接入 GPU
-
-从 [GPU 部署说明](docs/GPU_DEPLOYMENT.md) 开始。已提供四个脚本，分别安装与启动歌声 Worker、ACE-Step，模型采用独立虚拟环境。脚本需在租用的 Ubuntu NVIDIA GPU 服务器运行；本机没有执行安装或下载模型。
+Alternatively, with Python 3 installed:
 
 ```bash
-cp .env.example .env
+python3 -m http.server 8788 --directory web
 ```
 
-在 `.env` 中配置真实服务地址后重启本地服务。Key 只由后端读取，前端不显示。
+The Python/static option supports the prepared demo only. The project operator configures `DEEPSEEK_API_KEY` for planning and `FAL_KEY` for ACE-Step/Stable Audio in `.env`; Mureka is an optional alternative. Listeners never supply credentials. Set `MUSICCRAFT_DOMESTIC_ONLY=true` to hide and disable overseas model providers. Personal singing conversion still needs the team GPU worker. See [managed model setup](docs/MANAGED_MODELS.md) for API limits and activation steps. Use `npm start` and configure `.env` for live model tasks. Node.js 22 LTS is recommended. Serve the `web/` directory rather than opening `web/index.html` directly: instrument samples and the score are loaded through `fetch`.
 
-- 风格改编：`MUSICCRAFT_MODE=live` + `ACESTEP_BASE_URL`。
-- 音色翻唱：同为 live，配置 `VOICE_WORKER_URL`；这是本项目 Worker 的地址，不是 Seed-VC 网页地址。
-- LLM 解析：`MUSICCRAFT_PLANNER=llm`，配置 `LLM_BASE_URL`、`LLM_MODEL`、`LLM_API_KEY`。默认 rules 不依赖外部 LLM。
+## Demo features
 
-点击执行真实任务后，歌曲与参考录音会上传至你配置的模型服务器。LLM 模式解析时会发送文字与继承参数（可能含歌词）。优先使用组员本人或已获授权的素材。
+- **13 listening styles:** pop, chamber classical, gentle chamber, rock, folk, jazz swing, bossa nova, funk, reggae, lo-fi hip-hop, erhu disco, circus swing, and chiptune.
+- **31 instrument sounds:** keyboards, guitars, basses, strings, winds, brass, plucked instruments, sampled erhu, and synthesized drums.
+- **Arrangement workbench:** style presets, up to eight parts, instrument audition and replacement, add/remove parts, mute, solo, volume, tempo, and transposition.
+- **MIDI tools:** import a simple melody and export the current arrangement with note events, tempo, and General MIDI program mappings.
+- **Playback:** prepared audio, seeking, looping, version comparison, favorites, library search, and downloads.
+- **Personalization:** Chinese/English switching, four appearance themes, and a collapsible desktop sidebar.
 
-## 目录与检查
+Theme, language, sidebar preferences, and favorites are stored in the current browser. Original demo uploads and MIDI remain local. Audio selected in the new Agent panel is uploaded to the application backend when planning and sent to the configured music service when the user starts a live task. Agent briefs and results are stored in the ignored `.musiccraft-data/` directory; keys stay in server-side `.env`.
+
+## Suggested presentation
+
+1. Open the unified music workspace. The shared Agent area supports both creation and restyling; all other sections remain on the same page.
+2. Scroll to **Listen and compare** and play **Erhu disco**, then try **Circus swing** or **Rock**. In **Arrangement**, choose a style and press **Play arrangement**.
+3. Click an instrument name to replace it, or use **Add instrument** to introduce another part.
+4. Use **S** to hear a part alone, then export the arrangement as MIDI.
+5. In the supplied-song case, switch **A / B** to compare the source excerpt with a prepared classical arrangement at the same playhead position. Press **1–6** to switch between six synchronized versions, **7** to compare the early AI cover, **0** for Auto-DJ, and **P** to play or stop.
+
+## Project structure
 
 ```text
-musiccraft/        任务参数、规划器、执行器、SQLite、本地 API、模型适配器
-workers/          异步歌声服务与真实音频处理命令
-web/              原生 HTML / CSS / JavaScript 工作台
-Deploy: deploy/   GPU 安装与启动脚本
-scripts/          打包脚本（排除密钥、音频与模型）
-tests/            参数、流程、HTTP、GPU 命令与取消契约测试
-docs/             部署、接口、架构、proposal、演示讲稿
+web/                         Frontend source and deployable static site
+  index.html                 Application shell
+  app.js                     Navigation, playback, library, and MIDI parsing
+  music-catalog.js           Style and instrument definitions
+  sampler.js                 Sample playback and synthesized drums
+  studio-score.js            Editable arrangement templates
+  studio.js                  Workbench controls and MIDI export
+  styles-ui.js               Style selection, gallery, and result panels
+  preferences.js             Appearance, language, and sidebar controls
+  i18n.js                    UI translation dictionary
+  song-case.js               Prepared source/arrangement comparison
+  assets/                    Bundled audio, samples, artwork, score, and credits
+scripts/                     Local server, checks, and standalone HTML packaging
+docs/                        Architecture and audio provenance
+tools/audio/                 Historical original-theme composition/rendering sources
+server/                      Agent API, planners, model adapters, uploads and jobs
+prompts/                     Versioned internal planning and feedback instructions
+workers/                     Private Demucs → Seed-VC → FFmpeg voice service
+deploy/                      Pinned GPU dependencies, model manifest and scripts
+tests/                       Node HTTP/Agent contracts and Python voice tests
 ```
+
+The application uses plain HTML, CSS, and JavaScript. There is no frontend compilation step: deploy `web/` as a static directory.
+
+## Development
+
+Install the pinned formatting dependency once:
 
 ```bash
-python3 -B -m unittest discover -s tests -v
-python3 scripts/package.py
+npm ci
+npm run check
+npm run format:check
 ```
 
-自动测试使用临时 WAV、模拟模型响应和模拟 GPU 命令，不调用付费服务，不证明真实模型效果。前端另经过本地浏览器流程验收。
+Useful commands:
 
-## 项目边界
+| Command                               | Purpose                                          |
+| ------------------------------------- | ------------------------------------------------ |
+| `npm start`                           | Start the dependency-free local server           |
+| `npm run check`                       | Check JavaScript syntax and required demo assets |
+| `npm run format`                      | Apply the shared Prettier configuration          |
+| `npm run format:check`                | Verify formatting without changing files         |
+| `python3 scripts/build-standalone.py` | Create a single offline HTML in `artifacts/`     |
 
-- 风格改编是整段重新生成；主旋律保留为软约束，不能严格替换复杂歌曲中的某一个乐器。
-- 保留歌词需要显式粘贴原歌词；尚无自动歌词转写。原唱音色应使用专门的歌声路线处理。
-- 歌声转换保留原唱的音高与时间结构，不保证目标音色完全一致。分离伪影、对齐与混音需真实听测。
-- 分轨已经保存用于试听；尚未实现跳过分离的自动分轨缓存复用。
-- Voice Worker 支持请求取消并终止自身子进程；ACE-Step 取消主要停止本地等待，远端任务可能继续。
-- Worker 队列在内存中，重启不恢复；已下载到本地工作台的结果可回放。工作台启动时把中断任务标记失败。
-- 这是本机开发原型，使用显式 Python 工作流与线程池；不需要先引入 LangGraph、Redis 或训练基础模型。
+The standalone HTML embeds the app, music, images, and instrument samples. It is a generated presentation artifact; edit the files under `web/` and rebuild it when needed.
 
-继续阅读：[演示讲稿](docs/DEMO_RUNBOOK.md) · [模型协议](docs/INTEGRATIONS.md) · [项目提案](docs/PROPOSAL.md) · [架构](docs/ARCHITECTURE.md) · [本地 API](docs/API.md)。
+## Team workflow
+
+Use GitHub Desktop or the Git CLI. Pull the latest `main` before starting, create a short feature branch, and open a pull request when the change is ready. Ask one teammate to review before merging. Keep each pull request focused on one task.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the working agreement and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the application flow.
+
+## What is implemented, and what is planned
+
+**Implemented:** real prepared audio, actual local sample playback, editable arrangement templates, MIDI import/export, and the interface features listed above. Ten additional versions of the original theme and the supplied-song arrangements were genuinely generated offline using ACE-Step 1.5 Turbo. Their prompts, seeds, and checks are recorded in [docs/audio/](docs/audio/).
+
+**Live Agent integration:** centrally managed DeepSeek/OpenAI planning, versioned internal prompts, validated plans, uploads, asynchronous jobs, polling, cancellation, downloads and feedback-based revision. The single Generate action plans and executes without displaying the internal prompt. Music adapters include fal ACE-Step/Stable Audio, optional Mureka and a self-hosted ACE-Step adapter. DeepSeek has passed a real request; fal authentication has been checked, but full fal music generation has not yet been validated. No provider credentials are included in this repository. See [managed setup](docs/MANAGED_MODELS.md), [protocol setup](docs/MODEL_AGENT_SETUP.md) and [training suggestions](docs/TRAINING_PLAN.md).
+
+**Verified singing-conversion pipeline:** a private Demucs → Seed-VC → FFmpeg worker has completed real GPU inference on an RTX 3090, including a MusicCraft backend request planned by DeepSeek. A 10-second sample completed in about 24 seconds after submission in one test. It supports source/reference uploads, clip controls, progress, cancellation, stereo mixing and five-track playback/download. The reference was an official sample; personal voice similarity and listening quality still require evaluation with the user’s recordings. This uses pretrained zero-shot conversion, with no per-user training. See [voice deployment and use](docs/VOICE_AND_MODELS.md).
+
+**Not implemented:** general-purpose transcription in the editable MIDI workbench and natural-language MIDI editing. The five bundled melody-locked remixes were produced offline with separation, transcription, and hand-written arrangement rules; see [tools/remix/](tools/remix/README.md). Prepared examples remain separate from live task results. The editable workbench does not reproduce every detail of an AI-rendered version.
+
+MIDI import targets simple melodic Type 0/1 PPQ files. General MIDI does not define an erhu program, so the erhu part uses a fiddle mapping on export; its recorded erhu sound is available inside this application. Generative covers can change melodic details. Automated audio metrics are supporting checks, not a claim of human listening approval.
+
+## Audio and asset credits
+
+- **Letters in the Sun:** an original procedural theme, with original rendered arrangements and additional offline AI interpretations.
+- **Supplied-song case:** a user-provided 20-second excerpt, approximately 0:47–1:07, and prepared AI arrangements. The full original MP3 is not included. Artist attribution comes from the supplied filename; this material is not relicensed as original project music.
+- **Erhu:** Berklee Intersectional Soundbox Archive (BISA); performer Yu Chun Chan, recording engineer Josefina Ugarte, and editor Asher Deverna. The source collection states CC BY. Samples were trimmed, converted to mono, and normalized.
+- **General instrument samples:** FluidR3 by Frank Wen, pre-rendered by Benjamin Gleitzman / MIDI.js Soundfonts. The collection specifies CC BY 3.0 for these samples.
+- **Artwork:** AI-generated cover images.
+- **Icons:** Lucide, under the bundled ISC license.
+
+Full instrument source and license links are in [web/assets/instrument-credits.html](web/assets/instrument-credits.html). The Lucide license is in [web/assets/LUCIDE-LICENSE.txt](web/assets/LUCIDE-LICENSE.txt). Third-party assets retain their respective terms. No blanket open-source license has been assigned to the project code yet.

@@ -11,8 +11,9 @@ from email.policy import default
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from musiccraft.models import TaskSpec,ValidationError
-from musiccraft.store import new_id
+from uuid import uuid4
+from .spec import TaskSpec, ValidationError
+def new_id(): return uuid4().hex
 from .pipeline import PipelineConfig,PipelineError,run_pipeline
 
 MAX_BODY = 66*1024*1024
@@ -35,7 +36,6 @@ def parse_upload(body,content_type):
     if len(parts["source"])>32*1024*1024 or len(parts["reference"])>32*1024*1024 or len(parts["spec"])>32768:
         raise ValidationError("字段超过大小限制")
     spec = TaskSpec.from_dict(json.loads(parts["spec"]))
-    if spec.task!="voice_cover": raise ValidationError("Worker 仅接受 voice_cover")
     return spec.to_dict(),parts["source"],parts["reference"]
 
 
@@ -49,8 +49,9 @@ class VoiceService:
         with self.lock:
             if sum(j["status"] in {"queued","running","canceling"} for j in self.jobs.values())>=4:
                 raise ValidationError("Worker 队列已满，请稍后重试")
-            job_id=new_id();folder=self.root/job_id;folder.mkdir()
+            job_id=new_id();folder=self.root/job_id;folder.mkdir(mode=0o700)
             (folder/"input.audio").write_bytes(source);(folder/"ref.audio").write_bytes(reference)
+            (folder/"input.audio").chmod(0o600);(folder/"ref.audio").chmod(0o600)
             self.jobs[job_id]={"id":job_id,"status":"queued","stage":"queued","message":"等待 GPU", "error":None,"artifacts":{}}
             self.pool.submit(self.run,job_id,spec)
             return dict(self.jobs[job_id])
